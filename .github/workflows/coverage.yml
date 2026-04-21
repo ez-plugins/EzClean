@@ -1,0 +1,37 @@
+name: Coverage
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    # Coverage requires a JDK that JaCoCo supports; update when JaCoCo gains Java 25 support.
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Build and install MockBukkit dev/26.1.1
+        run: |
+          git clone --depth=1 --branch dev/26.1.1 https://github.com/MockBukkit/MockBukkit.git /tmp/MockBukkit
+          cd /tmp/MockBukkit && ./gradlew publishToMavenLocal -xtest -xjavadoc
+
+      - name: Build and generate coverage report
+        run: ./mvnw -B test checkstyle:check -P coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: target/site/jacoco/jacoco.xml
+          flags: unittests
+          fail_ci_if_error: false

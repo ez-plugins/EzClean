@@ -1,0 +1,30 @@
+# markdownlint configuration for EzClean docs.
+# See: https://github.com/DavidAnson/markdownlint#rules--aliases
+
+default: true
+
+# Allow HTML in markdown (used for badges and GitHub-specific features).
+MD033:
+  allowed_elements:
+    - details
+    - summary
+    - br
+    - img
+    - a
+    - p
+
+# Allow first heading to be h2 inside docs pages (h1 reserved for site title).
+MD041: false
+
+# Line length — allow up to 160 chars (code examples and blockquotes can be wide).
+MD013:
+  line_length: 160
+  code_blocks: false
+  tables: false
+
+# Allow duplicate headings across files (e.g. "Configuration" appears in multiple pages).
+MD024:
+  allow_different_nesting: true
+
+# Allow emphasis used as a heading (bold text sometimes used for sub-headings in notes).
+MD036: false

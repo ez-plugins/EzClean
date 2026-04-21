@@ -1,0 +1,52 @@
+# EzClean message templates. Values use MiniMessage formatting.
+#
+# The "defaults" section applies to every cleaner profile unless a more specific
+# override is provided in the "cleaners" section (keyed by cleaner id).
+# Placeholders use MiniMessage tag syntax (e.g. {minutes} becomes <minutes>).
+#
+# Example of a cleaner-specific override:
+# cleaners:
+#   nether:
+#     warning:
+#       message: "<gold>Nether cleanup soon!</gold>"
+
+defaults:
+  warning:
+    # Available tags: {minutes}, {cleaner}
+    message: "<yellow>⚠ Entity cleanup in <gold>{minutes}</gold> minutes. Clear valuables!</yellow>"
+  broadcast:
+    start:
+      # Available tags: {cleaner}
+      message: "<red><bold>✦ Entity cleanup commencing...</bold></red>"
+    summary:
+      # Available tags: {count}, {minutes}, {cleaner}
+      message: "<gray>✓ Removed <gold>{count}</gold> entities. Next cleanup in <gold>{minutes}</gold> minutes.</gray>"
+    pre-clean:
+      # Available tags: {minutes}, {cleaner}, {top_worlds}, {top_chunks}
+      # Leave blank to disable the pre-clean summary broadcast.
+      message: ""
+    interval:
+      # Available tags: {minutes}, {cleaner}
+      message: "<yellow>⚠ Cleanup in <gold>{minutes}</gold> minutes. Clear valuables!</yellow>"
+    dynamic:
+      # Available tags: {minutes}, {seconds}, {cleaner}
+      # When using the {seconds} tag, messages can be configured for per-second reminders
+      # (e.g. seconds: [5,4,3,2,1] in the cleaner profile).
+      message: "<gold>⏳ {cleaner} cleanup in <yellow>{minutes}</yellow> minute(s)!</gold>"
+  stats-summary:
+    # Available tags: {cleaner}, {runs}, {total_removed}, {avg_duration}, {avg_tps_impact},
+    # {top_groups}, {top_worlds}, {last_removed}, {last_duration}, {last_tps_impact}
+    message: "<gray>Cleanup stats for <aqua>{cleaner}</aqua>: <gold>{runs}</gold> runs, <gold>{total_removed}</gold> removed total. Avg duration: <gold>{avg_duration}</gold>. Avg TPS impact: <gold>{avg_tps_impact}</gold>. Top groups: {top_groups}. Top worlds: {top_worlds}.</gray>"
+  cancel:
+    # Available tags (unless noted otherwise): {cost}, {cleaner}
+    hover-message: "<yellow>Click to pay <gold>{cost}</gold> to cancel this cleanup.</yellow>"
+    success-message: "<green>You paid <gold>{cost}</gold> to cancel the <aqua>{cleaner}</aqua> cleanup.</green>"
+    # Available tags: {player}, {cost}, {cleaner}, {minutes}
+    broadcast-message: "<gold>{player}</gold> canceled the <aqua>{cleaner}</aqua> cleanup. Next cleanup in <yellow>{minutes}</yellow> minutes."
+    insufficient-funds-message: "<red>You need <gold>{cost}</gold> to cancel the cleanup.</red>"
+    # Available tags: {cleaner}
+    disabled-message: "<red>This cleanup cannot be canceled.</red>"
+    # Available tags: {cleaner}
+    no-economy-message: "<red>Economy is unavailable. Cleanup cannot be canceled.</red>"
+
+cleaners: {}

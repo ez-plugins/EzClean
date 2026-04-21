@@ -1,0 +1,17 @@
+coverage:
+  precision: 2
+  round: down
+  range: "60...100"
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 5%
+    patch:
+      default:
+        target: auto
+        threshold: 10%
+
+ignore:
+  - "src/main/java/com/skyblockexp/ezclean/Bootstrap.java"
+  - "src/main/java/com/skyblockexp/ezclean/EzCleanPlugin.java"

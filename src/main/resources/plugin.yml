@@ -1,0 +1,40 @@
+name: EzClean
+version: ${project.version}
+main: com.skyblockexp.ezclean.EzCleanPlugin
+description: Keep your worlds tidy with automated cleanup of stray entities.
+api-version: 1.21
+folia-supported: true
+softdepend: [WorldGuard, Vault]
+commands:
+  ezclean:
+    description: Manage EzClean cleaners.
+    usage: /<command> run [id] | /<command> cancel [id] | /<command> reload | /<command> time [id] | /<command> toggle <feature> [id] | /<command> usage [plugin] | /<command> stats [id]
+    aliases: [clean]
+permissions:
+  ezclean.clean:
+    description: Allows triggering EzClean cleanup profiles on demand.
+    default: op
+  ezclean.reload:
+    description: Allows reloading the EzClean configuration.
+    default: op
+  ezclean.status:
+    description: Allows checking the time remaining for EzClean cleanup profiles.
+    default: op
+  ezclean.usage:
+    description: Allows inspecting scheduler usage per plugin.
+    default: op
+  ezclean.stats:
+    description: Allows viewing cleanup stats snapshots.
+    default: op
+  ezclean.cancel:
+    description: Allows players to pay to cancel upcoming cleanup cycles.
+    default: true
+  ezclean.toggle:
+    description: Allows admins to toggle EzClean features in-game.
+    default: op
+  ezclean.deathchest.limit.bypass:
+    description: Bypasses the per-player death chest limit.
+    default: op
+  ezclean.deathchest.protection.bypass:
+    description: Bypasses death chest loot protection (open any player's death chest).
+    default: op

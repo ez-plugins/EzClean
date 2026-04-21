@@ -1,0 +1,108 @@
+# Default EzClean cleaner profile. Duplicate this file and adjust the values to create
+# additional cleanup schedules (e.g. nether.yml, end.yml).
+interval-minutes: 60
+
+# Optional warning broadcast before cleanup runs.
+warning:
+  enabled: false
+  # How many minutes before the cleanup to send the warning message.
+  minutes-before: 5
+  # MiniMessage formatted message lives in messages.yml under cleaners.<id>.warning.message.
+
+broadcast:
+  start:
+    enabled: true
+    # MiniMessage formatted message lives in messages.yml under cleaners.<id>.broadcast.start.message.
+  summary:
+    enabled: true
+    # MiniMessage formatted message lives in messages.yml under cleaners.<id>.broadcast.summary.message.
+  pre-clean:
+    # Optional pre-clean summary shown during the warning phase.
+    # Available tags: {minutes}, {cleaner}, {top_worlds}, {top_chunks}
+    # MiniMessage formatted message lives in messages.yml under cleaners.<id>.broadcast.pre-clean.message.
+  interval:
+    enabled: false
+    # Broadcast reminder every N minutes. Available tags: {minutes}, {cleaner}
+    every-minutes: 15
+    # MiniMessage formatted message lives in messages.yml under cleaners.<id>.broadcast.interval.message.
+  dynamic:
+    enabled: false
+    # Extra reminders at specific minute marks before the cleanup.
+    minutes: [30, 15, 10, 5]
+    # Optional per-second reminders (seconds remaining until cleanup).
+    # Use this to broadcast messages at the last few seconds, e.g. [5,4,3,2,1]
+    seconds: []
+    # MiniMessage formatted message lives in messages.yml under cleaners.<id>.broadcast.dynamic.message.
+  stats-summary:
+    enabled: false
+    # Broadcast a digest every N cleanup runs for this profile.
+    every-runs: 5
+    # MiniMessage formatted message lives in messages.yml under cleaners.<id>.stats-summary.message.
+
+cancel:
+  enabled: true
+  # Amount players must pay (using Vault) to cancel the upcoming cleanup.
+  cost: 50000.0
+  # Hover tooltip shown when players hover the clickable broadcast message. Tags: {cost}, {cleaner}
+  # Message configured in messages.yml under cleaners.<id>.cancel.hover-message.
+  # Message sent to the player after a successful cancellation. Tags: {cost}, {cleaner}
+  # Message configured in messages.yml under cleaners.<id>.cancel.success-message.
+  # Broadcast message announcing the cancellation. Tags: {player}, {cost}, {cleaner}, {minutes}
+  # Message configured in messages.yml under cleaners.<id>.cancel.broadcast-message.
+  # Message shown when the player cannot afford the cancellation. Tags: {cost}, {cleaner}
+  # Message configured in messages.yml under cleaners.<id>.cancel.insufficient-funds-message.
+  # Message displayed if cancellation is disabled for the cleaner. Tags: {cleaner}
+  # Message configured in messages.yml under cleaners.<id>.cancel.disabled-message.
+  # Message displayed if Vault or an economy provider is missing. Tags: {cleaner}
+  # Message configured in messages.yml under cleaners.<id>.cancel.no-economy-message.
+
+# Set to a list of world names to restrict cleanups. Use "*" to affect all worlds.
+# If WorldGuard is installed, regions with the "ezclean-bypass" flag set to ALLOW are skipped.
+worlds:
+  - "*"
+
+# Automatically culls excessive piles of the same entity type that share a block position.
+pile-detection:
+  enabled: true
+  # Maximum number of tracked entities allowed on a single block before extras are removed.
+  max-per-block: 120
+  # Entity types that should be monitored for piles. Defaults target drops and experience.
+  entity-types:
+    - ITEM
+    - EXPERIENCE_ORB
+  # When enabled, named entities (e.g. armor stands or mobs with display names) are excluded.
+  ignore-named-entities: true
+
+remove:
+  hostile-mobs: true
+  # Includes farm animals, golems, ambient mobs, and aquatic wildlife.
+  passive-mobs: false
+  # Covers villagers and wandering traders that extend AbstractVillager.
+  villagers: false
+  dropped-items: true
+  projectiles: true
+  experience-orbs: true
+  area-effect-clouds: true
+  falling-blocks: true
+  primed-tnt: true
+
+protect:
+  players: true
+  armor-stands: true
+  display-entities: true
+  # Prevent removal of mobs that have been tamed by players.
+  tamed-mobs: true
+  # Skip mobs that have been given a custom name (e.g. via name tags).
+  name-tagged-mobs: true
+
+entity-types:
+  # Explicit entity types to always keep (overrides any removal rule).
+  keep: []
+  # Explicit entity types to remove (runs after keep/protect rules).
+  remove: []
+
+performance:
+  # When true, entity removal is spread across multiple server ticks (500 per tick) to reduce
+  # TPS spikes on servers with large entity counts. Disabled by default — safe to enable on
+  # large servers. Can also be toggled live with: /ezclean toggle async-removal [id]
+  async-removal: false

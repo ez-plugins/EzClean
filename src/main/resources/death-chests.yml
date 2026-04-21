@@ -1,0 +1,28 @@
+# EzClean death chest configuration
+enabled: false
+# How many minutes the chest should remain before despawning. Set to 0 to keep forever.
+despawn-minutes: 30
+# MiniMessage formatted title shown when opening the death chest inventory.
+inventory-title: "<gold>Death Chest</gold>"
+
+# Maximum number of active death chests per player (set to 0 for unlimited)
+max-chests-per-player: 2
+
+# Loot protection: only the owner can open for X minutes after death
+loot-protection:
+  enabled: true
+  owner-only-minutes: 5
+
+# Hologram above chest (uses ArmorStand, no dependency required)
+hologram:
+  enabled: true
+  text: "<gold>Death Chest</gold>"
+
+# Particle effect above chest
+particles:
+  enabled: true
+  type: VILLAGER_HAPPY
+
+# What to do if the owner is offline when the chest expires or is removed
+# Options: 'drop' (drop items), 'keep' (keep chest until login), 'remove' (delete with no drops)
+offline-owner-handling: drop

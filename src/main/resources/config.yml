@@ -1,0 +1,6 @@
+# EzClean global configuration.
+# Most settings live in death-chests.yml and cleaners/*.yml.
+
+update-check:
+  # Set to false to disable the SpigotMC update checker entirely.
+  enabled: true
