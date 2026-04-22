@@ -141,11 +141,17 @@ entity-types:
 
 ```yaml
 performance:
-  # Spread entity removal over multiple ticks (500 entities/tick).
-  # Safe to enable on large servers. Disabled by default to preserve
-  # synchronous-removal guarantees for vanilla-compatible plugins.
+  # Paper/Spigot: moves the entity scan off the main thread; spreads removal over
+  # multiple ticks (async-removal-batch-size entities/tick) so the main thread is never
+  # blocked by a large single-tick removal spike.
+  # Folia: dispatches each entity.remove() to the entity's owning region thread via
+  # the entity scheduler, so all removals execute concurrently across region threads.
   # Toggle live with: /ezclean toggle async-removal
   async-removal: false
+  # Number of entities removed per tick when async-removal is true (Paper/Spigot only).
+  # Lower values spread load further; higher values complete removal in fewer ticks.
+  # Has no effect on Folia — all removals are dispatched in a single pass.
+  async-removal-batch-size: 500
 ```
 
 See the [Performance guide](performance.md) for when to enable this.
@@ -164,10 +170,9 @@ Run `/ezclean reload` after editing.
 
 Death chests are **disabled by default**. Toggle globally with:
 
-```
+```text
 /ezclean toggle death-chests
 ```
 
 See the full key reference inside `death-chests.yml` — every key is documented
 with a comment.
-

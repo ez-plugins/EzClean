@@ -31,7 +31,7 @@ All permission nodes default to **op** unless stated otherwise.
 
 ## Assigning with LuckPerms
 
-```
+```text
 /lp user <player> permission set ezclean.toggle true
 /lp group admin permission set ezclean.toggle true
 ```

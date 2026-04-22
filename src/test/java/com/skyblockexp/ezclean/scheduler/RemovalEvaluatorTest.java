@@ -11,6 +11,7 @@ import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Item;
 import org.bukkit.entity.Tameable;
 import org.bukkit.entity.Vehicle;
+import org.bukkit.event.entity.CreatureSpawnEvent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -57,7 +58,7 @@ class RemovalEvaluatorTest {
         Mockito.when(bypass.shouldBypass(item)).thenReturn(true);
 
         RemovalEvaluator evaluator = new RemovalEvaluator(bypass);
-        assertNull(evaluator.evaluateRemovalGroup(item, settings, null));
+        assertNull(evaluator.evaluateRemovalGroup(item, settings, "", null));
     }
 
     @Test
@@ -77,8 +78,8 @@ class RemovalEvaluatorTest {
         Mockito.when(item.getType()).thenReturn(EntityType.ITEM);
 
         RemovalEvaluator evaluator = new RemovalEvaluator(null);
-        assertNull(evaluator.evaluateRemovalGroup(zombie, settings, null));
-        assertEquals("forced-removal", evaluator.evaluateRemovalGroup(item, settings, null));
+        assertNull(evaluator.evaluateRemovalGroup(zombie, settings, "", null));
+        assertEquals("forced-removal", evaluator.evaluateRemovalGroup(item, settings, "", null));
     }
 
     @Test
@@ -95,7 +96,7 @@ class RemovalEvaluatorTest {
         Mockito.when(fox.getType()).thenReturn(EntityType.FOX);
 
         RemovalEvaluator evaluator = new RemovalEvaluator(null);
-        assertNull(evaluator.evaluateRemovalGroup(fox, settings, null));
+        assertNull(evaluator.evaluateRemovalGroup(fox, settings, "", null));
     }
 
     @Test
@@ -106,7 +107,7 @@ class RemovalEvaluatorTest {
         Mockito.when(pileDetector.shouldCull(item)).thenReturn(true);
 
         RemovalEvaluator evaluator = new RemovalEvaluator(null);
-        assertEquals("pile-detection", evaluator.evaluateRemovalGroup(item, settings, pileDetector));
+        assertEquals("pile-detection", evaluator.evaluateRemovalGroup(item, settings, "", pileDetector));
     }
 
     @Test
@@ -116,12 +117,12 @@ class RemovalEvaluatorTest {
         EntityType boatType = resolveVehicleType("BOAT", "MINECART", "CHEST_BOAT");
         Mockito.when(v.getType()).thenReturn(boatType);
         RemovalEvaluator evaluator = new RemovalEvaluator(null);
-        assertEquals("vehicles", evaluator.evaluateRemovalGroup(v, settings, null));
+        assertEquals("vehicles", evaluator.evaluateRemovalGroup(v, settings, "", null));
 
         Entity nonVehicle = Mockito.mock(Entity.class);
         EntityType minecartType = resolveVehicleType("MINECART", "MINECART_CHEST", "MINECART_HOPPER");
         Mockito.when(nonVehicle.getType()).thenReturn(minecartType);
-        assertEquals("vehicles", evaluator.evaluateRemovalGroup(nonVehicle, settings, null));
+        assertEquals("vehicles", evaluator.evaluateRemovalGroup(nonVehicle, settings, "", null));
     }
 
     private EntityType resolveVehicleType(String... preferredNames) {
@@ -150,5 +151,100 @@ class RemovalEvaluatorTest {
             }
         }
         return null;
+    }
+
+    // -----------------------------------------------------------------------
+    // Spawn-reason filter tests
+    // -----------------------------------------------------------------------
+
+    @Test
+    void spawnReasonRestrictProtectsFromCategoryRemoval() {
+        YamlConfiguration config = new YamlConfiguration();
+        ConfigurationSection cleaners = config.createSection("cleaners");
+        ConfigurationSection cleaner = cleaners.createSection("test");
+        cleaner.set("interval-minutes", 5);
+        cleaner.set("remove.hostile-mobs", true);
+        cleaner.set("spawn-reasons.restrict", List.of("SPAWNER"));
+
+        CleanupSettings settings = CleanupSettings.fromConfiguration(config, Logger.getLogger("test")).get(0);
+
+        org.bukkit.entity.Zombie zombie = Mockito.mock(org.bukkit.entity.Zombie.class);
+        Mockito.when(zombie.getType()).thenReturn(EntityType.ZOMBIE);
+        Mockito.when(zombie.getEntitySpawnReason())
+                .thenReturn(CreatureSpawnEvent.SpawnReason.SPAWNER);
+
+        RemovalEvaluator evaluator = new RemovalEvaluator(null);
+        // Spawner zombie must be protected even though hostile-mobs removal is on.
+        assertNull(evaluator.evaluateRemovalGroup(zombie, settings, "world", null));
+    }
+
+    @Test
+    void spawnReasonRestrictDoesNotProtectUnmatchedReason() {
+        YamlConfiguration config = new YamlConfiguration();
+        ConfigurationSection cleaners = config.createSection("cleaners");
+        ConfigurationSection cleaner = cleaners.createSection("test");
+        cleaner.set("interval-minutes", 5);
+        cleaner.set("remove.hostile-mobs", true);
+        cleaner.set("spawn-reasons.restrict", List.of("SPAWNER"));
+
+        CleanupSettings settings = CleanupSettings.fromConfiguration(config, Logger.getLogger("test")).get(0);
+
+        org.bukkit.entity.Zombie zombie = Mockito.mock(org.bukkit.entity.Zombie.class);
+        Mockito.when(zombie.getType()).thenReturn(EntityType.ZOMBIE);
+        Mockito.when(zombie.getEntitySpawnReason())
+                .thenReturn(CreatureSpawnEvent.SpawnReason.NATURAL);
+
+        RemovalEvaluator evaluator = new RemovalEvaluator(null);
+        // Naturally spawned zombie has no restriction — it should be removed.
+        assertEquals("hostile-mobs", evaluator.evaluateRemovalGroup(zombie, settings, "world", null));
+    }
+
+    @Test
+    void spawnReasonForceRemoveBypassesNameTagProtection() {
+        YamlConfiguration config = new YamlConfiguration();
+        ConfigurationSection cleaners = config.createSection("cleaners");
+        ConfigurationSection cleaner = cleaners.createSection("test");
+        cleaner.set("interval-minutes", 5);
+        cleaner.set("remove.hostile-mobs", true);
+        cleaner.set("protect.name-tagged-mobs", true);
+        cleaner.set("spawn-reasons.force-remove", List.of("SPAWNER_EGG"));
+
+        CleanupSettings settings = CleanupSettings.fromConfiguration(config, Logger.getLogger("test")).get(0);
+
+        org.bukkit.entity.Zombie zombie = Mockito.mock(org.bukkit.entity.Zombie.class);
+        Mockito.when(zombie.getType()).thenReturn(EntityType.ZOMBIE);
+        Mockito.when(zombie.getCustomName()).thenReturn("Pinky");
+        Mockito.when(zombie.getEntitySpawnReason())
+                .thenReturn(CreatureSpawnEvent.SpawnReason.SPAWNER_EGG);
+
+        RemovalEvaluator evaluator = new RemovalEvaluator(null);
+        // Named mob but force-removed by spawn reason — must return a removal group.
+        assertEquals("forced-spawn-reason", evaluator.evaluateRemovalGroup(zombie, settings, "world", null));
+    }
+
+    @Test
+    void worldOverrideSpawnReasonTakesPrecedenceOverGlobal() {
+        YamlConfiguration config = new YamlConfiguration();
+        ConfigurationSection cleaners = config.createSection("cleaners");
+        ConfigurationSection cleaner = cleaners.createSection("test");
+        cleaner.set("interval-minutes", 5);
+        cleaner.set("remove.hostile-mobs", true);
+        // Global: restrict SPAWNER.
+        cleaner.set("spawn-reasons.restrict", List.of("SPAWNER"));
+        // world_nether override: no restrictions.
+        cleaner.set("world-overrides.world_nether.spawn-reasons.restrict", List.of());
+
+        CleanupSettings settings = CleanupSettings.fromConfiguration(config, Logger.getLogger("test")).get(0);
+
+        org.bukkit.entity.Zombie zombie = Mockito.mock(org.bukkit.entity.Zombie.class);
+        Mockito.when(zombie.getType()).thenReturn(EntityType.ZOMBIE);
+        Mockito.when(zombie.getEntitySpawnReason())
+                .thenReturn(CreatureSpawnEvent.SpawnReason.SPAWNER);
+
+        RemovalEvaluator evaluator = new RemovalEvaluator(null);
+        // In "world": global restrict applies — protected.
+        assertNull(evaluator.evaluateRemovalGroup(zombie, settings, "world", null));
+        // In "world_nether": override has empty restrict list — removed.
+        assertEquals("hostile-mobs", evaluator.evaluateRemovalGroup(zombie, settings, "world_nether", null));
     }
 }

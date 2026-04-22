@@ -43,7 +43,6 @@ public final class EntityCleanupScheduler {
     private static final long MILLIS_PER_MINUTE = 60_000L;
     private static final long MILLIS_PER_SECOND = 1000L;
     private static final String CANCEL_PERMISSION = "ezclean.cancel";
-    private static final int ASYNC_REMOVAL_BATCH_SIZE = 500;
 
     private static final int PRE_CLEAN_SUMMARY_LIMIT = 3;
     private static final int STATS_SUMMARY_LIMIT = 4;
@@ -204,6 +203,59 @@ public final class EntityCleanupScheduler {
                 ? EntityPileDetector.createSummaryTracker(settings.getPileDetectionSettings())
                 : null;
 
+        if (!FoliaScheduler.isFolia() && settings.isAsyncRemoval()) {
+            // Paper/Spigot with async-removal: true — run the entity scan off the main thread,
+            // then dispatch removal batches and finishCleanup back to the main thread.
+            // Folia is excluded: world.getEntities() must be called from the owning region thread.
+            FoliaScheduler.runAsync(plugin, () -> {
+                List<Entity> toRemove = new ArrayList<>();
+                Map<String, Integer> groupCounts = new HashMap<>();
+                Map<String, Integer> worldCounts = new HashMap<>();
+                for (World world : Bukkit.getWorlds()) {
+                    if (!settings.isWorldEnabled(world.getName())) {
+                        continue;
+                    }
+                    for (Entity entity : world.getEntities()) {
+                        String removalGroup = removalEvaluator.evaluateRemovalGroup(entity, settings, world.getName(), pileDetector);
+                        if (removalGroup != null) {
+                            toRemove.add(entity);
+                            groupCounts.merge(removalGroup, 1, Integer::sum);
+                            worldCounts.merge(world.getName(), 1, Integer::sum);
+                            if (summaryTracker != null) {
+                                summaryTracker.recordEntity(entity);
+                            }
+                        }
+                    }
+                }
+                // Compute the pre-clean summary while still on the async thread; it is written to
+                // cachedPreCleanSummaries on the main thread to avoid publishing across threads.
+                final PreCleanSummary preSummary = summaryTracker != null
+                        ? new PreCleanSummary(
+                                formatTopWorlds(summaryTracker.getTopWorlds(PRE_CLEAN_SUMMARY_LIMIT)),
+                                formatTopChunks(summaryTracker.getTopChunks(PRE_CLEAN_SUMMARY_LIMIT)))
+                        : null;
+
+                // Hand removal and post-cleanup back to the main thread so that
+                // entity.remove() and finishCleanup always run on the correct thread.
+                FoliaScheduler.runGlobalLater(plugin, () -> {
+                    if (preSummary != null) {
+                        cachedPreCleanSummaries.put(settings.getCleanerId(), preSummary);
+                    }
+                    if (toRemove.size() > settings.getAsyncRemovalBatchSize()) {
+                        scheduleEntityRemovalBatches(toRemove, settings, startNanos, tpsBefore, groupCounts, worldCounts);
+                    } else {
+                        for (Entity entity : toRemove) {
+                            entity.remove();
+                        }
+                        finishCleanup(settings, toRemove.size(), startNanos, tpsBefore, groupCounts, worldCounts);
+                    }
+                }, 1L);
+            });
+            return;
+        }
+
+        // Folia (any async-removal setting) or Paper/Spigot with async-removal: false —
+        // keep the existing synchronous scan + removal path unchanged.
         List<Entity> toRemove = new ArrayList<>();
         Map<String, Integer> groupCounts = new HashMap<>();
         Map<String, Integer> worldCounts = new HashMap<>();
@@ -212,7 +264,7 @@ public final class EntityCleanupScheduler {
                 continue;
             }
             for (Entity entity : world.getEntities()) {
-                String removalGroup = removalEvaluator.evaluateRemovalGroup(entity, settings, pileDetector);
+                String removalGroup = removalEvaluator.evaluateRemovalGroup(entity, settings, world.getName(), pileDetector);
                 if (removalGroup != null) {
                     toRemove.add(entity);
                     groupCounts.merge(removalGroup, 1, Integer::sum);
@@ -232,24 +284,37 @@ public final class EntityCleanupScheduler {
             cachedPreCleanSummaries.put(settings.getCleanerId(), new PreCleanSummary(topWorlds, topChunks));
         }
 
-        if (settings.isAsyncRemoval() && toRemove.size() > ASYNC_REMOVAL_BATCH_SIZE) {
-            // Spread removals across multiple ticks to avoid a single-tick main-thread spike.
-            scheduleEntityRemovalBatches(toRemove, settings, startNanos, tpsBefore, groupCounts, worldCounts);
-        } else {
+        if (FoliaScheduler.isFolia() && settings.isAsyncRemoval()) {
+            // Folia with async-removal: true — dispatch all removals to entity region threads in a
+            // single pass. FoliaScheduler.removeEntity calls entity.getScheduler().run(), which just
+            // registers the task (cheap). The actual entity.remove() executes on each entity's owning
+            // region thread so all removals run concurrently without blocking the global region thread.
+            int total = toRemove.size();
             for (Entity entity : toRemove) {
-                entity.remove();
+                if (entity.isValid()) {
+                    FoliaScheduler.removeEntity(entity, plugin);
+                }
             }
-            finishCleanup(settings, toRemove.size(), startNanos, tpsBefore, groupCounts, worldCounts);
+            FoliaScheduler.runGlobalLater(plugin,
+                    () -> finishCleanup(settings, total, startNanos, tpsBefore, groupCounts, worldCounts), 1L);
+            return;
         }
+
+        // Synchronous removal on main/global thread (all platforms with async-removal: false).
+        for (Entity entity : toRemove) {
+            entity.remove();
+        }
+        finishCleanup(settings, toRemove.size(), startNanos, tpsBefore, groupCounts, worldCounts);
     }
 
     private void scheduleEntityRemovalBatches(List<Entity> toRemove, CleanupSettings settings,
             long startNanos, Double tpsBefore, Map<String, Integer> groupCounts, Map<String, Integer> worldCounts) {
         int total = toRemove.size();
-        int numBatches = (total + ASYNC_REMOVAL_BATCH_SIZE - 1) / ASYNC_REMOVAL_BATCH_SIZE;
+        int batchSize = settings.getAsyncRemovalBatchSize();
+        int numBatches = (total + batchSize - 1) / batchSize;
         for (int i = 0; i < numBatches; i++) {
-            int batchStart = i * ASYNC_REMOVAL_BATCH_SIZE;
-            int batchEnd = Math.min(batchStart + ASYNC_REMOVAL_BATCH_SIZE, total);
+            int batchStart = i * batchSize;
+            int batchEnd = Math.min(batchStart + batchSize, total);
             boolean isLastBatch = (i == numBatches - 1);
             long delayTicks = (long) i + 1L; // 1-indexed; one batch per tick
             FoliaScheduler.runGlobalLater(plugin, () -> {
@@ -339,8 +404,8 @@ public final class EntityCleanupScheduler {
     // Backwards-compatibility helper used by existing unit tests which reflectively
     // invoke this method. Delegates to RemovalEvaluator so logic remains testable.
     private @Nullable String evaluateRemovalGroup(Entity entity, CleanupSettings settings,
-            @Nullable EntityPileDetector pileDetector) {
-        return removalEvaluator.evaluateRemovalGroup(entity, settings, pileDetector);
+            String worldName, @Nullable EntityPileDetector pileDetector) {
+        return removalEvaluator.evaluateRemovalGroup(entity, settings, worldName, pileDetector);
     }
 
     private void sendWarningBroadcast(CleanupSettings settings, long minutesRemaining) {
@@ -464,7 +529,7 @@ public final class EntityCleanupScheduler {
                 continue;
             }
             for (Entity entity : world.getEntities()) {
-                if (removalEvaluator.evaluateRemovalGroup(entity, settings, pileDetector) != null) {
+                if (removalEvaluator.evaluateRemovalGroup(entity, settings, world.getName(), pileDetector) != null) {
                     pileDetector.recordEntity(entity);
                 }
             }

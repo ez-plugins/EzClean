@@ -101,8 +101,40 @@ entity-types:
   # Explicit entity types to remove (runs after keep/protect rules).
   remove: []
 
+# Spawn-reason filtering — restrict or bypass entity removal based on how an entity was spawned.
+# Spawn reason names correspond to CreatureSpawnEvent.SpawnReason (case-insensitive).
+# Common values: NATURAL, SPAWNER, SPAWNER_EGG, BREEDING, CHUNK_GEN, CUSTOM, COMMAND, EGG,
+#                DISPENSE_EGG, BUILD_SNOWMAN, VILLAGE_DEFENSE, REINFORCEMENTS, JOCKEY, TRAP
+spawn-reasons:
+  # Never remove entities with these spawn reasons, regardless of other removal rules.
+  # Example: keep spawner-bred mobs safe from the hostile-mobs or passive-mobs sweep.
+  restrict: []
+  # Always remove entities with these spawn reasons, bypassing tamed / name-tagged protection.
+  # The entity still needs to match an enabled category (hostile-mobs, dropped-items, etc.).
+  force-remove: []
+
+# Per-world spawn-reason overrides. A world entry REPLACES (does not merge with) the global
+# spawn-reasons block for that world. World names are case-insensitive.
+# Uncomment and adjust to enable:
+# world-overrides:
+#   world_nether:
+#     spawn-reasons:
+#       restrict: [SPAWNER]
+#       force-remove: [SPAWNER_EGG]
+#   creative_world:
+#     spawn-reasons:
+#       restrict: [SPAWNER, SPAWNER_EGG, BREEDING]
+
 performance:
-  # When true, entity removal is spread across multiple server ticks (500 per tick) to reduce
-  # TPS spikes on servers with large entity counts. Disabled by default — safe to enable on
-  # large servers. Can also be toggled live with: /ezclean toggle async-removal [id]
+  # When true, the behaviour depends on the server platform:
+  #   Paper/Spigot — entity scan runs on a background thread; removal is spread across
+  #                  multiple server ticks (async-removal-batch-size entities/tick).
+  #   Folia        — each entity.remove() is dispatched to the entity's owning region thread,
+  #                  so all removals run concurrently across region threads.
+  # Disabled by default — safe to enable on large servers.
+  # Toggle live with: /ezclean toggle async-removal [id]
   async-removal: false
+  # Number of entities removed per tick when async-removal is true (Paper/Spigot only).
+  # Lower values spread load across more ticks; higher values finish faster.
+  # Has no effect on Folia (all removals are dispatched in a single pass).
+  async-removal-batch-size: 500

@@ -2,10 +2,12 @@ package com.skyblockexp.ezclean.config;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
@@ -93,6 +95,9 @@ public final class CleanupSettings {
     private final @Nullable PileDetectionSettings pileDetectionSettings;
     private final CleanupCancelSettings cancelSettings;
     private final boolean asyncRemoval;
+    private final int asyncRemovalBatchSize;
+    private final SpawnReasonFilter globalSpawnReasonFilter;
+    private final Map<String, SpawnReasonFilter> worldSpawnReasonFilters;
 
     private static final Pattern MINIMESSAGE_PLACEHOLDER_PATTERN = Pattern.compile("\\{([a-zA-Z0-9_-]+)\\}");
 
@@ -111,7 +116,8 @@ public final class CleanupSettings {
             boolean protectNameTaggedMobs, Set<String> enabledWorlds,
             Set<EntityType> forcedKeeps, Set<EntityType> forcedRemovals,
             @Nullable PileDetectionSettings pileDetectionSettings, CleanupCancelSettings cancelSettings,
-            boolean asyncRemoval) {
+            boolean asyncRemoval, int asyncRemovalBatchSize,
+            SpawnReasonFilter globalSpawnReasonFilter, Map<String, SpawnReasonFilter> worldSpawnReasonFilters) {
         this.cleanerId = cleanerId;
         this.cleanupIntervalTicks = cleanupIntervalTicks;
         this.warningOffsetTicks = warningOffsetTicks;
@@ -155,6 +161,9 @@ public final class CleanupSettings {
         this.pileDetectionSettings = pileDetectionSettings;
         this.cancelSettings = cancelSettings;
         this.asyncRemoval = asyncRemoval;
+        this.asyncRemovalBatchSize = asyncRemovalBatchSize;
+        this.globalSpawnReasonFilter = globalSpawnReasonFilter;
+        this.worldSpawnReasonFilters = Collections.unmodifiableMap(new HashMap<>(worldSpawnReasonFilters));
     }
 
     /**
@@ -308,6 +317,7 @@ public final class CleanupSettings {
 
         PileDetectionSettings pileDetectionSettings = loadPileDetectionSettings(section, logger, sectionPath);
         boolean asyncRemoval = section.getBoolean("performance.async-removal", false);
+        int asyncRemovalBatchSize = Math.max(1, section.getInt("performance.async-removal-batch-size", 500));
 
         com.skyblockexp.ezclean.config.CleanupCancelSettings cancelSettings = com.skyblockexp.ezclean.config.CleanupCancelSettings.disabled();
         ConfigurationSection cancelSection = section.getConfigurationSection("cancel");
@@ -333,6 +343,28 @@ public final class CleanupSettings {
         long cleanupIntervalTicks = intervalMinutes * TICKS_PER_MINUTE;
         long warningOffsetTicks = warningMinutes * TICKS_PER_MINUTE;
 
+        SpawnReasonFilter globalSpawnReasonFilter = SpawnReasonFilter.parse(
+                section.getConfigurationSection("spawn-reasons"), logger, sectionPath + ".spawn-reasons");
+
+        Map<String, SpawnReasonFilter> worldSpawnReasonFilters = Collections.emptyMap();
+        ConfigurationSection worldOverridesSection = section.getConfigurationSection("world-overrides");
+        if (worldOverridesSection != null) {
+            Map<String, SpawnReasonFilter> worldFilters = new HashMap<>();
+            for (String worldName : worldOverridesSection.getKeys(false)) {
+                ConfigurationSection worldSection = worldOverridesSection.getConfigurationSection(worldName);
+                if (worldSection == null) {
+                    continue;
+                }
+                SpawnReasonFilter worldFilter = SpawnReasonFilter.parse(
+                        worldSection.getConfigurationSection("spawn-reasons"), logger,
+                        sectionPath + ".world-overrides." + worldName + ".spawn-reasons");
+                worldFilters.put(worldName.toLowerCase(Locale.ROOT), worldFilter);
+            }
+            if (!worldFilters.isEmpty()) {
+                worldSpawnReasonFilters = worldFilters;
+            }
+        }
+
         return new CleanupSettings(cleanerId, cleanupIntervalTicks, warningOffsetTicks, warningEnabled, startEnabled,
                 summaryEnabled, intervalEnabled, intervalMinutesBetweenBroadcasts, intervalMessage, dynamicEnabled,
                 dynamicMinutes, dynamicSeconds, dynamicMessage, statsSummaryEnabled, statsSummaryEveryRuns, statsSummaryMessage,
@@ -340,7 +372,8 @@ public final class CleanupSettings {
                 removeHostileMobs, removePassiveMobs, removeVillagers, removeVehicles, removeDroppedItems,
                 removeProjectiles, removeExperienceOrbs, removeAreaEffectClouds, removeFallingBlocks, removePrimedTnt,
                 protectPlayers, protectArmorStands, protectDisplayEntities, protectTamedMobs, protectNameTaggedMobs,
-                worlds, keep, remove, pileDetectionSettings, cancelSettings, asyncRemoval);
+                worlds, keep, remove, pileDetectionSettings, cancelSettings, asyncRemoval, asyncRemovalBatchSize,
+                globalSpawnReasonFilter, worldSpawnReasonFilters);
     }
 
     private static String resolveMessage(String cleanerId, ConfigurationSection section, MessageConfiguration messages,
@@ -668,6 +701,24 @@ public final class CleanupSettings {
 
     public boolean isAsyncRemoval() {
         return asyncRemoval;
+    }
+
+    public int getAsyncRemovalBatchSize() {
+        return asyncRemovalBatchSize;
+    }
+
+    /**
+     * Returns the spawn-reason filter for the given world.
+     * Falls back to the global (profile-level) filter when no world-specific override
+     * is configured.
+     *
+     * @param worldName the name of the world (case-insensitive)
+     * @return the effective {@link SpawnReasonFilter} for that world
+     */
+    public SpawnReasonFilter getSpawnReasonFilter(String worldName) {
+        SpawnReasonFilter worldFilter =
+                worldSpawnReasonFilters.get(worldName.toLowerCase(Locale.ROOT));
+        return worldFilter != null ? worldFilter : globalSpawnReasonFilter;
     }
 
     /**
