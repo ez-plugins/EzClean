@@ -102,3 +102,28 @@ For sustained performance improvements consider:
 - Raising `max-entity-cramming` in `bukkit.yml`
 - Using Paper's per-world entity limits
 - Profiling with [Spark](https://spark.lucko.me/) to identify the root source of entity buildup
+
+## Skipping cleanup on empty servers
+
+When players are offline the cleanup pass still iterates every loaded entity in every enabled
+world. On servers that unload chunks aggressively this is cheap, but on networks with always-loaded
+spawn points it can still touch thousands of entities for no player benefit.
+
+Use the **minimum player gate** to skip the run entirely:
+
+```yaml
+# cleaners/default.yml
+min-players: 1    # skip if no players are online
+```
+
+For world-specific savings — for example the nether loads large areas despite few players — set
+a per-world threshold:
+
+```yaml
+world-overrides:
+  world_nether:
+    min-players: 1    # skip nether cleanup when nobody is in the nether
+```
+
+The check is evaluated at cleanup time (not tick time), so the gate adds zero ongoing overhead.
+If the threshold is not met the entire run is aborted before the entity scan starts.

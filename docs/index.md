@@ -18,9 +18,16 @@ and can be enabled by an admin at any time, in-game, with a single command.
 
 - **Flexible cleaner profiles** — define multiple independent cleanup schedules (e.g. one for
   the overworld every hour, one for the nether every 20 minutes)
+- **Per-world interval overrides** — give individual worlds their own cleanup interval inside
+  an existing profile without duplicating config; worlds without an override share the global
+  timer automatically
+- **Minimum player gates** — skip a cleanup run entirely when fewer than N players are online
+  globally, or skip a specific world when fewer than N players are present inside it
 - **Pile detection** — automatically culls entity piles that exceed a configurable threshold
 - **Warning & cancellation system** — warn players before a cleanup; let them pay (via Vault)
   to cancel it
+- **Post-cleanup commands** — run arbitrary console commands after each cleanup completes
+  (e.g. summon effects, broadcast messages)
 - **Death chests** — optional per-player death chest that holds loot for a configurable time
 - **Async entity removal** — spread large removal batches across multiple ticks to keep TPS
   stable (disabled by default, toggle live with `/ezclean toggle async-removal`)
