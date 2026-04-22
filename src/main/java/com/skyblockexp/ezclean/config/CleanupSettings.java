@@ -93,6 +93,7 @@ public final class CleanupSettings {
     private final @Nullable PileDetectionSettings pileDetectionSettings;
     private final CleanupCancelSettings cancelSettings;
     private final boolean asyncRemoval;
+    private final int asyncRemovalBatchSize;
 
     private static final Pattern MINIMESSAGE_PLACEHOLDER_PATTERN = Pattern.compile("\\{([a-zA-Z0-9_-]+)\\}");
 
@@ -111,7 +112,7 @@ public final class CleanupSettings {
             boolean protectNameTaggedMobs, Set<String> enabledWorlds,
             Set<EntityType> forcedKeeps, Set<EntityType> forcedRemovals,
             @Nullable PileDetectionSettings pileDetectionSettings, CleanupCancelSettings cancelSettings,
-            boolean asyncRemoval) {
+            boolean asyncRemoval, int asyncRemovalBatchSize) {
         this.cleanerId = cleanerId;
         this.cleanupIntervalTicks = cleanupIntervalTicks;
         this.warningOffsetTicks = warningOffsetTicks;
@@ -155,6 +156,7 @@ public final class CleanupSettings {
         this.pileDetectionSettings = pileDetectionSettings;
         this.cancelSettings = cancelSettings;
         this.asyncRemoval = asyncRemoval;
+        this.asyncRemovalBatchSize = asyncRemovalBatchSize;
     }
 
     /**
@@ -308,6 +310,7 @@ public final class CleanupSettings {
 
         PileDetectionSettings pileDetectionSettings = loadPileDetectionSettings(section, logger, sectionPath);
         boolean asyncRemoval = section.getBoolean("performance.async-removal", false);
+        int asyncRemovalBatchSize = Math.max(1, section.getInt("performance.async-removal-batch-size", 500));
 
         com.skyblockexp.ezclean.config.CleanupCancelSettings cancelSettings = com.skyblockexp.ezclean.config.CleanupCancelSettings.disabled();
         ConfigurationSection cancelSection = section.getConfigurationSection("cancel");
@@ -340,7 +343,7 @@ public final class CleanupSettings {
                 removeHostileMobs, removePassiveMobs, removeVillagers, removeVehicles, removeDroppedItems,
                 removeProjectiles, removeExperienceOrbs, removeAreaEffectClouds, removeFallingBlocks, removePrimedTnt,
                 protectPlayers, protectArmorStands, protectDisplayEntities, protectTamedMobs, protectNameTaggedMobs,
-                worlds, keep, remove, pileDetectionSettings, cancelSettings, asyncRemoval);
+                worlds, keep, remove, pileDetectionSettings, cancelSettings, asyncRemoval, asyncRemovalBatchSize);
     }
 
     private static String resolveMessage(String cleanerId, ConfigurationSection section, MessageConfiguration messages,
@@ -668,6 +671,10 @@ public final class CleanupSettings {
 
     public boolean isAsyncRemoval() {
         return asyncRemoval;
+    }
+
+    public int getAsyncRemovalBatchSize() {
+        return asyncRemovalBatchSize;
     }
 
     /**

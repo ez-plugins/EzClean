@@ -8,6 +8,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -42,6 +43,10 @@ class ResourceYamlValidationUnitTest {
                 "performance.async-removal must be present in cleaners/default.yml");
         assertFalse(config.getBoolean("performance.async-removal"),
                 "performance.async-removal should default to false");
+        assertTrue(config.contains("performance.async-removal-batch-size"),
+                "performance.async-removal-batch-size must be present in cleaners/default.yml");
+        assertEquals(500, config.getInt("performance.async-removal-batch-size"),
+                "performance.async-removal-batch-size should default to 500");
     }
 
     @Test

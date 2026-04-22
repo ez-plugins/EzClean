@@ -102,7 +102,15 @@ entity-types:
   remove: []
 
 performance:
-  # When true, entity removal is spread across multiple server ticks (500 per tick) to reduce
-  # TPS spikes on servers with large entity counts. Disabled by default — safe to enable on
-  # large servers. Can also be toggled live with: /ezclean toggle async-removal [id]
+  # When true, the behaviour depends on the server platform:
+  #   Paper/Spigot — entity scan runs on a background thread; removal is spread across
+  #                  multiple server ticks (async-removal-batch-size entities/tick).
+  #   Folia        — each entity.remove() is dispatched to the entity's owning region thread,
+  #                  so all removals run concurrently across region threads.
+  # Disabled by default — safe to enable on large servers.
+  # Toggle live with: /ezclean toggle async-removal [id]
   async-removal: false
+  # Number of entities removed per tick when async-removal is true (Paper/Spigot only).
+  # Lower values spread load across more ticks; higher values finish faster.
+  # Has no effect on Folia (all removals are dispatched in a single pass).
+  async-removal-batch-size: 500
