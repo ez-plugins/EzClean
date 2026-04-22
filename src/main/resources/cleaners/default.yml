@@ -101,6 +101,30 @@ entity-types:
   # Explicit entity types to remove (runs after keep/protect rules).
   remove: []
 
+# Spawn-reason filtering — restrict or bypass entity removal based on how an entity was spawned.
+# Spawn reason names correspond to CreatureSpawnEvent.SpawnReason (case-insensitive).
+# Common values: NATURAL, SPAWNER, SPAWNER_EGG, BREEDING, CHUNK_GEN, CUSTOM, COMMAND, EGG,
+#                DISPENSE_EGG, BUILD_SNOWMAN, VILLAGE_DEFENSE, REINFORCEMENTS, JOCKEY, TRAP
+spawn-reasons:
+  # Never remove entities with these spawn reasons, regardless of other removal rules.
+  # Example: keep spawner-bred mobs safe from the hostile-mobs or passive-mobs sweep.
+  restrict: []
+  # Always remove entities with these spawn reasons, bypassing tamed / name-tagged protection.
+  # The entity still needs to match an enabled category (hostile-mobs, dropped-items, etc.).
+  force-remove: []
+
+# Per-world spawn-reason overrides. A world entry REPLACES (does not merge with) the global
+# spawn-reasons block for that world. World names are case-insensitive.
+# Uncomment and adjust to enable:
+# world-overrides:
+#   world_nether:
+#     spawn-reasons:
+#       restrict: [SPAWNER]
+#       force-remove: [SPAWNER_EGG]
+#   creative_world:
+#     spawn-reasons:
+#       restrict: [SPAWNER, SPAWNER_EGG, BREEDING]
+
 performance:
   # When true, the behaviour depends on the server platform:
   #   Paper/Spigot — entity scan runs on a background thread; removal is spread across

@@ -122,9 +122,9 @@ class EntityCleanupSchedulerRemovalTest {
      */
     private boolean shouldRemove(com.skyblockexp.ezclean.scheduler.EntityCleanupScheduler scheduler, Entity entity, com.skyblockexp.ezclean.config.CleanupSettings settings) {
         try {
-            var method = com.skyblockexp.ezclean.scheduler.EntityCleanupScheduler.class.getDeclaredMethod("evaluateRemovalGroup", Entity.class, com.skyblockexp.ezclean.config.CleanupSettings.class, Class.forName("com.skyblockexp.ezclean.util.EntityPileDetector"));
+            var method = com.skyblockexp.ezclean.scheduler.EntityCleanupScheduler.class.getDeclaredMethod("evaluateRemovalGroup", Entity.class, com.skyblockexp.ezclean.config.CleanupSettings.class, String.class, Class.forName("com.skyblockexp.ezclean.util.EntityPileDetector"));
             method.setAccessible(true);
-            Object result = method.invoke(scheduler, entity, settings, null);
+            Object result = method.invoke(scheduler, entity, settings, "", null);
             return result != null;
         } catch (Exception e) {
             throw new RuntimeException(e);
