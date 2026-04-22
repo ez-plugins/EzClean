@@ -28,3 +28,7 @@ MD024:
 
 # Allow emphasis used as a heading (bold text sometimes used for sub-headings in notes).
 MD036: false
+
+# Jekyll frontmatter title: is separate from the body H1 — don't count it as a heading.
+MD025:
+  front_matter_title: ""

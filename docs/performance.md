@@ -56,7 +56,7 @@ regions are removed in parallel.
 
 Via command (live, no restart needed):
 
-```
+```text
 /ezclean toggle async-removal
 /ezclean toggle async-removal <cleaner_id>   # if you have multiple profiles
 ```

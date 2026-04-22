@@ -33,13 +33,13 @@ After installation, a single `default` cleaner is active.
 It runs every **60 minutes** and removes hostile mobs, dropped items, projectiles,
 experience orbs, area-effect clouds, falling blocks, and primed TNT.
 
-All __heavy__ features (pile-detection, warnings, cancellation, async removal, death chests)
+All **heavy** features (pile-detection, warnings, cancellation, async removal, death chests)
 are **off by default**. Enable them safely one at a time via `/ezclean toggle` or by editing
 the relevant YAML files and running `/ezclean reload`.
 
 ### Verify it is working
 
-```
+```text
 /ezclean time            # Shows minutes until the next cleanup run
 /ezclean run             # Triggers a manual cleanup immediately
 /ezclean stats           # Shows total runs and removed entity counts

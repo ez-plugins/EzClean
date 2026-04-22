@@ -39,4 +39,3 @@ and can be enabled by an admin at any time, in-game, with a single command.
 | [Performance guide](performance.md) | Tuning EzClean for large servers |
 | [Moderation guide](moderation.md) | Admin workflows and best practices |
 | [Developer guide](developer.md) | Building, testing, and contributing |
-

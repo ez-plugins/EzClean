@@ -170,10 +170,9 @@ Run `/ezclean reload` after editing.
 
 Death chests are **disabled by default**. Toggle globally with:
 
-```
+```text
 /ezclean toggle death-chests
 ```
 
 See the full key reference inside `death-chests.yml` — every key is documented
 with a comment.
-

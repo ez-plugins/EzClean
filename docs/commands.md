@@ -27,7 +27,7 @@ Executes a cleanup immediately, bypassing the timer. Useful for testing or one-o
 
 If multiple cleaner profiles are configured, use the profile ID to target one:
 
-```
+```text
 /ezclean run           # runs all profiles
 /ezclean run default   # runs only the "default" profile
 ```
@@ -40,7 +40,7 @@ Flips a feature on or off for a specific cleaner profile (or globally for `death
 Changes are written directly to the relevant YAML file and the plugin reloads automatically —
 no server restart required.
 
-```
+```text
 /ezclean toggle async-removal            # toggle for the single profile (or prompts for ID)
 /ezclean toggle async-removal default    # explicit profile ID
 /ezclean toggle death-chests             # global feature (no profile ID needed)
@@ -77,7 +77,7 @@ The cost is configurable in `cleaners/<id>.yml` under `cancel.cost`.
 Shows a snapshot of pending and active Bukkit scheduler tasks grouped by plugin, with an ASCII
 load bar. Useful for diagnosing scheduler overhead from other plugins.
 
-```
+```text
 /ezclean usage                    # static snapshot of all plugins
 /ezclean usage EzClean            # filter to a single plugin
 /ezclean usage live               # continuous live view in chat + action bar
@@ -92,8 +92,7 @@ load bar. Useful for diagnosing scheduler overhead from other plugins.
 Displays accumulated cleanup statistics: total runs, total entities removed, average duration
 and TPS impact per profile, and a breakdown of removal reasons (entity type groups) and worlds.
 
-```
+```text
 /ezclean stats            # stats for all profiles
 /ezclean stats default    # stats for the "default" profile only
 ```
-

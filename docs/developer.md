@@ -47,7 +47,7 @@ Run locally with:
 
 ## Project structure
 
-```
+```text
 src/main/java/com/skyblockexp/ezclean/
 ├── Bootstrap.java              Plugin lifecycle (onEnable / onDisable)
 ├── EzCleanPlugin.java          Main plugin class
@@ -90,4 +90,3 @@ for the full contribution guide. In summary:
 - Target the `main` branch.
 - Include tests for new logic.
 - Run `./mvnw test checkstyle:check` before opening a PR.
-

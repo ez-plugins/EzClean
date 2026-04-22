@@ -14,7 +14,7 @@ requiring restarts.
 Use `/ezclean toggle` to flip any feature on or off. Changes are written to YAML immediately
 so they persist across restarts.
 
-```
+```text
 /ezclean toggle async-removal         # enable spread-tick removal (recommended for large servers)
 /ezclean toggle pile-detection        # enable pile culling
 /ezclean toggle warning               # enable pre-cleanup warning broadcast
@@ -26,7 +26,7 @@ After a toggle the plugin reloads automatically. No `/restart` or `/reload` is n
 
 ## Triggering a manual cleanup
 
-```
+```text
 /ezclean run              # run all cleaner profiles immediately
 /ezclean run default      # run only the "default" profile
 ```
@@ -35,13 +35,13 @@ Useful for cleaning up after a large event or lag spike before the scheduled run
 
 ## Checking cleanup timers
 
-```
+```text
 /ezclean time             # when will each profile next run?
 ```
 
 ## Reviewing cleanup stats
 
-```
+```text
 /ezclean stats            # totals: runs, removed entities, average TPS impact
 /ezclean stats default    # stats for the "default" profile only
 ```
@@ -52,7 +52,7 @@ Stats are persistent across restarts (stored in `plugins/EzClean/stats/`).
 
 After editing any YAML file manually:
 
-```
+```text
 /ezclean reload
 ```
 
@@ -66,7 +66,7 @@ countdown broadcasts will restart from the beginning.
 
 If other plugins are causing scheduler lag, use the usage inspector:
 
-```
+```text
 /ezclean usage            # overview of pending tasks by plugin
 /ezclean usage live       # live action-bar + chat view with auto-refresh
 /ezclean usage SomePlugin # filter to a specific plugin
@@ -77,7 +77,7 @@ If other plugins are causing scheduler lag, use the usage inspector:
 
 Death chests are off by default. Enable them with:
 
-```
+```text
 /ezclean toggle death-chests
 ```
 
@@ -103,13 +103,13 @@ worlds:
 If WorldGuard is installed, you can exclude a region from cleanups by setting the EzClean
 bypass flag:
 
-```
+```text
 /rg flag <region> ezclean-bypass allow
 ```
 
 Remove the flag to restore normal cleanup behaviour in that region:
 
-```
+```text
 /rg flag <region> ezclean-bypass deny
 ```
 
