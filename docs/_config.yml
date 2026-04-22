@@ -1,6 +1,6 @@
 title: EzClean
 description: Automated entity cleanup for Paper servers — keep your worlds tidy with minimal TPS impact.
-baseurl: "/ezclean"
+baseurl: "/EzClean"
 url: "https://ez-plugins.github.io"
 
 remote_theme: just-the-docs/just-the-docs

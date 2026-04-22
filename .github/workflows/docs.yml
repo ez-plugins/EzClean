@@ -29,7 +29,7 @@ jobs:
 
       - name: Build Jekyll site
         working-directory: docs
-        run: bundle exec jekyll build --destination _site --baseurl "/ezclean"
+        run: bundle exec jekyll build --destination _site --baseurl "/EzClean"
         env:
           JEKYLL_ENV: production
 
