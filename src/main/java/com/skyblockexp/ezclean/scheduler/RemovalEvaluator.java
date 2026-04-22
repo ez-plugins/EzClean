@@ -1,7 +1,10 @@
 package com.skyblockexp.ezclean.scheduler;
 
 import java.util.EnumSet;
+import java.util.List;
+import java.util.regex.Pattern;
 
+import com.skyblockexp.ezclean.config.ItemMetadataFilter;
 import com.skyblockexp.ezclean.config.SpawnReasonFilter;
 import com.skyblockexp.ezclean.integration.WorldGuardCleanupBypass;
 import com.skyblockexp.ezclean.config.CleanupSettings;
@@ -35,6 +38,12 @@ public final class RemovalEvaluator {
 
     private static final EnumSet<EntityType> BASIC_VEHICLE_TYPES = createBasicVehicleTypes();
 
+    /**
+     * Boss and rare entity types that are never removed by category-based cleanup rules.
+     * Explicit {@code entity-types.remove} (force-remove) entries still override this list.
+     */
+    private static final EnumSet<EntityType> BUILTIN_SAFE_TYPES = buildBuiltinSafeTypes();
+
     private final @Nullable WorldGuardCleanupBypass worldGuardBypass;
 
     public RemovalEvaluator(@Nullable WorldGuardCleanupBypass worldGuardBypass) {
@@ -52,6 +61,11 @@ public final class RemovalEvaluator {
         }
         if (settings.isForcedRemoval(entity.getType())) {
             return "forced-removal";
+        }
+        // Defensive blacklist: boss/rare entities are never removed by category rules.
+        // Explicit entity-types.remove entries (tested above) still override this.
+        if (BUILTIN_SAFE_TYPES.contains(entity.getType())) {
+            return null;
         }
         // Players are always protected — no config option can override this.
         if (entity instanceof Player && settings.protectPlayers()) {
@@ -79,7 +93,17 @@ public final class RemovalEvaluator {
         if (entity instanceof Mob mob && settings.protectNameTaggedMobs()) {
             String customName = mob.getCustomName();
             if (customName != null && !customName.isBlank()) {
-                return null;
+                List<Pattern> patterns = settings.getNameTagPatterns();
+                if (patterns.isEmpty()) {
+                    // No patterns configured — protect all named mobs (original behaviour).
+                    return null;
+                }
+                // Patterns configured — only protect mobs whose name matches at least one.
+                for (Pattern p : patterns) {
+                    if (p.matcher(customName).find()) {
+                        return null;
+                    }
+                }
             }
         }
 
@@ -106,7 +130,11 @@ public final class RemovalEvaluator {
         if (settings.removeVehicles() && isVehicleEntity(entity)) {
             return "vehicles";
         }
-        if (entity instanceof Item && settings.removeDroppedItems()) {
+        if (entity instanceof Item itemEntity && settings.removeDroppedItems()) {
+            ItemMetadataFilter metaFilter = settings.getItemMetadataFilter();
+            if (metaFilter.isEnabled() && metaFilter.isProtected(itemEntity.getItemStack())) {
+                return null;
+            }
             return "dropped-items";
         }
         if (entity instanceof org.bukkit.entity.ExperienceOrb && settings.removeExperienceOrbs()) {
@@ -143,6 +171,24 @@ public final class RemovalEvaluator {
         }
         String typeName = type.name();
         return typeName.contains("MINECART");
+    }
+
+    private static EnumSet<EntityType> buildBuiltinSafeTypes() {
+        EnumSet<EntityType> types = EnumSet.noneOf(EntityType.class);
+        addIfPresent(types, "WITHER");
+        addIfPresent(types, "ENDER_DRAGON");
+        addIfPresent(types, "WARDEN");
+        addIfPresent(types, "ELDER_GUARDIAN");
+        return types;
+    }
+
+    /** Adds the entity type with the given name if it exists in this server version. */
+    private static void addIfPresent(EnumSet<EntityType> types, String name) {
+        try {
+            types.add(EntityType.valueOf(name));
+        } catch (IllegalArgumentException ignored) {
+            // Type not present in this server version — skip silently.
+        }
     }
 
     private static EnumSet<EntityType> createBasicVehicleTypes() {
