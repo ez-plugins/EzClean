@@ -98,6 +98,10 @@ public final class CleanupSettings {
     private final int asyncRemovalBatchSize;
     private final SpawnReasonFilter globalSpawnReasonFilter;
     private final Map<String, SpawnReasonFilter> worldSpawnReasonFilters;
+    private final int globalMinPlayers;
+    private final Map<String, Integer> worldMinPlayers;
+    private final Map<String, Long> worldIntervalOverrides;
+    private final List<String> postCleanupCommands;
 
     private static final Pattern MINIMESSAGE_PLACEHOLDER_PATTERN = Pattern.compile("\\{([a-zA-Z0-9_-]+)\\}");
 
@@ -117,7 +121,9 @@ public final class CleanupSettings {
             Set<EntityType> forcedKeeps, Set<EntityType> forcedRemovals,
             @Nullable PileDetectionSettings pileDetectionSettings, CleanupCancelSettings cancelSettings,
             boolean asyncRemoval, int asyncRemovalBatchSize,
-            SpawnReasonFilter globalSpawnReasonFilter, Map<String, SpawnReasonFilter> worldSpawnReasonFilters) {
+            SpawnReasonFilter globalSpawnReasonFilter, Map<String, SpawnReasonFilter> worldSpawnReasonFilters,
+            int globalMinPlayers, Map<String, Integer> worldMinPlayers,
+            Map<String, Long> worldIntervalOverrides, List<String> postCleanupCommands) {
         this.cleanerId = cleanerId;
         this.cleanupIntervalTicks = cleanupIntervalTicks;
         this.warningOffsetTicks = warningOffsetTicks;
@@ -164,6 +170,16 @@ public final class CleanupSettings {
         this.asyncRemovalBatchSize = asyncRemovalBatchSize;
         this.globalSpawnReasonFilter = globalSpawnReasonFilter;
         this.worldSpawnReasonFilters = Collections.unmodifiableMap(new HashMap<>(worldSpawnReasonFilters));
+        this.globalMinPlayers = Math.max(0, globalMinPlayers);
+        this.worldMinPlayers = Collections.unmodifiableMap(new HashMap<>(worldMinPlayers));
+        this.worldIntervalOverrides = Collections.unmodifiableMap(new HashMap<>(worldIntervalOverrides));
+        List<String> filteredCmds = new ArrayList<>();
+        for (String cmd : postCleanupCommands) {
+            if (cmd != null && !cmd.isBlank()) {
+                filteredCmds.add(cmd);
+            }
+        }
+        this.postCleanupCommands = Collections.unmodifiableList(filteredCmds);
     }
 
     /**
@@ -346,7 +362,11 @@ public final class CleanupSettings {
         SpawnReasonFilter globalSpawnReasonFilter = SpawnReasonFilter.parse(
                 section.getConfigurationSection("spawn-reasons"), logger, sectionPath + ".spawn-reasons");
 
+        int globalMinPlayers = Math.max(0, section.getInt("min-players", 0));
+
         Map<String, SpawnReasonFilter> worldSpawnReasonFilters = Collections.emptyMap();
+        Map<String, Integer> worldMinPlayersMap = new HashMap<>();
+        Map<String, Long> worldIntervalMap = new HashMap<>();
         ConfigurationSection worldOverridesSection = section.getConfigurationSection("world-overrides");
         if (worldOverridesSection != null) {
             Map<String, SpawnReasonFilter> worldFilters = new HashMap<>();
@@ -359,11 +379,21 @@ public final class CleanupSettings {
                         worldSection.getConfigurationSection("spawn-reasons"), logger,
                         sectionPath + ".world-overrides." + worldName + ".spawn-reasons");
                 worldFilters.put(worldName.toLowerCase(Locale.ROOT), worldFilter);
+                int wMin = worldSection.getInt("min-players", 0);
+                if (wMin > 0) {
+                    worldMinPlayersMap.put(worldName.toLowerCase(Locale.ROOT), wMin);
+                }
+                long wInterval = worldSection.getLong("interval-minutes", -1L);
+                if (wInterval >= 1L) {
+                    worldIntervalMap.put(worldName.toLowerCase(Locale.ROOT), wInterval);
+                }
             }
             if (!worldFilters.isEmpty()) {
                 worldSpawnReasonFilters = worldFilters;
             }
         }
+
+        List<String> postCleanupCommands = section.getStringList("post-cleanup-commands");
 
         return new CleanupSettings(cleanerId, cleanupIntervalTicks, warningOffsetTicks, warningEnabled, startEnabled,
                 summaryEnabled, intervalEnabled, intervalMinutesBetweenBroadcasts, intervalMessage, dynamicEnabled,
@@ -373,7 +403,8 @@ public final class CleanupSettings {
                 removeProjectiles, removeExperienceOrbs, removeAreaEffectClouds, removeFallingBlocks, removePrimedTnt,
                 protectPlayers, protectArmorStands, protectDisplayEntities, protectTamedMobs, protectNameTaggedMobs,
                 worlds, keep, remove, pileDetectionSettings, cancelSettings, asyncRemoval, asyncRemovalBatchSize,
-                globalSpawnReasonFilter, worldSpawnReasonFilters);
+                globalSpawnReasonFilter, worldSpawnReasonFilters,
+                globalMinPlayers, worldMinPlayersMap, worldIntervalMap, postCleanupCommands);
     }
 
     private static String resolveMessage(String cleanerId, ConfigurationSection section, MessageConfiguration messages,
@@ -719,6 +750,22 @@ public final class CleanupSettings {
         SpawnReasonFilter worldFilter =
                 worldSpawnReasonFilters.get(worldName.toLowerCase(Locale.ROOT));
         return worldFilter != null ? worldFilter : globalSpawnReasonFilter;
+    }
+
+    public int getGlobalMinPlayers() {
+        return globalMinPlayers;
+    }
+
+    public int getWorldMinPlayers(String worldName) {
+        return worldMinPlayers.getOrDefault(worldName.toLowerCase(Locale.ROOT), 0);
+    }
+
+    public Map<String, Long> getWorldIntervalOverrides() {
+        return worldIntervalOverrides;
+    }
+
+    public List<String> getPostCleanupCommands() {
+        return postCleanupCommands;
     }
 
     /**

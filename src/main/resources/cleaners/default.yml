@@ -2,6 +2,10 @@
 # additional cleanup schedules (e.g. nether.yml, end.yml).
 interval-minutes: 60
 
+# Minimum number of players that must be online globally for cleanup to run.
+# Set to 0 (default) to always run regardless of player count.
+min-players: 0
+
 # Optional warning broadcast before cleanup runs.
 warning:
   enabled: false
@@ -115,8 +119,18 @@ spawn-reasons:
 
 # Per-world spawn-reason overrides. A world entry REPLACES (does not merge with) the global
 # spawn-reasons block for that world. World names are case-insensitive.
+# Each world entry also supports:
+#   interval-minutes: <N>  — independent cleanup timer for this world (>= 1); the global
+#                            timer will skip this world when a per-world interval is set.
+#   min-players: <N>       — only clean this world when at least N players are present in it.
 # Uncomment and adjust to enable:
 # world-overrides:
+#   world_nether:
+#     interval-minutes: 30
+#     min-players: 1
+#     spawn-reasons:
+#       restrict: []
+#       force-remove: []
 #   world_nether:
 #     spawn-reasons:
 #       restrict: [SPAWNER]
@@ -138,3 +152,7 @@ performance:
   # Lower values spread load across more ticks; higher values finish faster.
   # Has no effect on Folia (all removals are dispatched in a single pass).
   async-removal-batch-size: 500
+
+# Console commands to run after every cleanup finishes. Standard Minecraft command syntax.
+# Example: execute in overworld run summon lightning_bolt ~ ~ ~
+post-cleanup-commands: []

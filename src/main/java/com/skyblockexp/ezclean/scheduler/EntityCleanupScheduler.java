@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -180,9 +181,16 @@ public final class EntityCleanupScheduler {
         scheduledCleanups.add(scheduled);
     }
 
-    private void performCleanup(CleanupSettings settings) {
+    private void performCleanup(CleanupSettings settings, @Nullable Set<String> restrictToWorlds) {
         long startNanos = System.nanoTime();
         Double tpsBefore = captureTpsSample();
+
+        // Global minimum-player gate: skip if fewer than N players are online server-wide.
+        int globalMin = settings.getGlobalMinPlayers();
+        if (globalMin > 0 && Bukkit.getOnlinePlayers().size() < globalMin) {
+            return;
+        }
+
         if (settings.isStartBroadcastEnabled()) {
             Component message = MINI_MESSAGE.deserialize(settings.getStartMessageTemplate(),
                     Placeholder.parsed("cleaner", settings.getCleanerId()));
@@ -213,6 +221,13 @@ public final class EntityCleanupScheduler {
                 Map<String, Integer> worldCounts = new HashMap<>();
                 for (World world : Bukkit.getWorlds()) {
                     if (!settings.isWorldEnabled(world.getName())) {
+                        continue;
+                    }
+                    if (restrictToWorlds != null && !restrictToWorlds.contains(world.getName().toLowerCase(Locale.ROOT))) {
+                        continue;
+                    }
+                    int worldMin = settings.getWorldMinPlayers(world.getName());
+                    if (worldMin > 0 && world.getPlayers().size() < worldMin) {
                         continue;
                     }
                     for (Entity entity : world.getEntities()) {
@@ -261,6 +276,13 @@ public final class EntityCleanupScheduler {
         Map<String, Integer> worldCounts = new HashMap<>();
         for (World world : Bukkit.getWorlds()) {
             if (!settings.isWorldEnabled(world.getName())) {
+                continue;
+            }
+            if (restrictToWorlds != null && !restrictToWorlds.contains(world.getName().toLowerCase(Locale.ROOT))) {
+                continue;
+            }
+            int worldMin = settings.getWorldMinPlayers(world.getName());
+            if (worldMin > 0 && world.getPlayers().size() < worldMin) {
                 continue;
             }
             for (Entity entity : world.getEntities()) {
@@ -354,6 +376,12 @@ public final class EntityCleanupScheduler {
                 player.sendMessage(legacyMessage);
             }
             Bukkit.getServer().getConsoleSender().sendMessage(legacyMessage);
+        }
+
+        // Post-cleanup commands — run as console after every cleanup finishes.
+        // finishCleanup is always invoked on the main/global thread, so dispatchCommand is safe.
+        for (String cmd : settings.getPostCleanupCommands()) {
+            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd);
         }
     }
 
@@ -648,6 +676,7 @@ public final class EntityCleanupScheduler {
         private final CleanupSettings settings;
         private final String normalizedCleanerId;
         private long secondsUntilCleanup;
+        private final Map<String, Long> worldSecondsCounters = new HashMap<>();
         private Runnable cancelCountdownTask;
         private long lastTickMillis;
 
@@ -658,6 +687,9 @@ public final class EntityCleanupScheduler {
 
         private void start() {
             secondsUntilCleanup = Math.max(1L, settings.getCleanupIntervalMinutes()) * 60L;
+            for (Map.Entry<String, Long> e : settings.getWorldIntervalOverrides().entrySet()) {
+                worldSecondsCounters.put(e.getKey(), e.getValue() * 60L);
+            }
             lastTickMillis = System.currentTimeMillis();
             cancelCountdownTask = FoliaScheduler.runGlobalTimer(
                     plugin, this::tick, TICKS_PER_SECOND, TICKS_PER_SECOND);
@@ -669,9 +701,35 @@ public final class EntityCleanupScheduler {
             if (secondsUntilCleanup < 0L) {
                 secondsUntilCleanup = 0L;
             }
+
+            // Per-world interval timers — fire independently of the global countdown.
+            for (Map.Entry<String, Long> entry : worldSecondsCounters.entrySet()) {
+                long remaining = entry.getValue() - 1L;
+                if (remaining <= 0L) {
+                    worldSecondsCounters.put(entry.getKey(),
+                            settings.getWorldIntervalOverrides().get(entry.getKey()) * 60L);
+                    performCleanup(settings, Collections.singleton(entry.getKey()));
+                } else {
+                    entry.setValue(remaining);
+                }
+            }
+
             handleCountdownBroadcasts(settings, secondsUntilCleanup);
             if (secondsUntilCleanup <= 0L) {
-                performCleanup(settings);
+                // Build the set of worlds the global timer should clean — exclude worlds
+                // that have their own per-world interval overrides.
+                Set<String> overridden = settings.getWorldIntervalOverrides().keySet();
+                Set<String> restrict = null;
+                if (!overridden.isEmpty()) {
+                    restrict = new HashSet<>();
+                    for (World w : Bukkit.getWorlds()) {
+                        String n = w.getName().toLowerCase(Locale.ROOT);
+                        if (settings.isWorldEnabled(w.getName()) && !overridden.contains(n)) {
+                            restrict.add(n);
+                        }
+                    }
+                }
+                performCleanup(settings, restrict);
                 secondsUntilCleanup = Math.max(1L, settings.getCleanupIntervalMinutes()) * 60L;
             }
             lastTickMillis = now;
@@ -689,13 +747,16 @@ public final class EntityCleanupScheduler {
         }
 
         private void triggerNow() {
-            performCleanup(settings);
+            performCleanup(settings, null);
             secondsUntilCleanup = Math.max(1L, settings.getCleanupIntervalMinutes()) * 60L;
             lastTickMillis = System.currentTimeMillis();
         }
 
         private Duration cancelNextRun() {
             secondsUntilCleanup = Math.max(1L, settings.getCleanupIntervalMinutes()) * 60L;
+            for (Map.Entry<String, Long> e : settings.getWorldIntervalOverrides().entrySet()) {
+                worldSecondsCounters.put(e.getKey(), e.getValue() * 60L);
+            }
             lastTickMillis = System.currentTimeMillis();
             return Duration.ofSeconds(secondsUntilCleanup);
         }
