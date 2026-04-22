@@ -2,6 +2,7 @@ package com.skyblockexp.ezclean.scheduler;
 
 import java.util.EnumSet;
 
+import com.skyblockexp.ezclean.config.SpawnReasonFilter;
 import com.skyblockexp.ezclean.integration.WorldGuardCleanupBypass;
 import com.skyblockexp.ezclean.config.CleanupSettings;
 import com.skyblockexp.ezclean.util.EntityPileDetector;
@@ -24,6 +25,7 @@ import org.bukkit.entity.Tameable;
 import org.bukkit.entity.Vehicle;
 import org.bukkit.entity.WaterMob;
 import org.bukkit.entity.Enemy;
+import org.bukkit.event.entity.CreatureSpawnEvent;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -40,7 +42,7 @@ public final class RemovalEvaluator {
     }
 
     public @Nullable String evaluateRemovalGroup(Entity entity, CleanupSettings settings,
-            @Nullable EntityPileDetector pileDetector) {
+            String worldName, @Nullable EntityPileDetector pileDetector) {
         if (worldGuardBypass != null && worldGuardBypass.shouldBypass(entity)) {
             return null;
         }
@@ -51,9 +53,20 @@ public final class RemovalEvaluator {
         if (settings.isForcedRemoval(entity.getType())) {
             return "forced-removal";
         }
+        // Players are always protected — no config option can override this.
         if (entity instanceof Player && settings.protectPlayers()) {
             return null;
         }
+
+        // Spawn-reason filter: force-remove bypasses the protect rules below.
+        SpawnReasonFilter spawnFilter = settings.getSpawnReasonFilter(worldName);
+        if (!spawnFilter.isEmpty()) {
+            CreatureSpawnEvent.SpawnReason spawnReason = entity.getEntitySpawnReason();
+            if (spawnFilter.isForceRemove(spawnReason)) {
+                return "forced-spawn-reason";
+            }
+        }
+
         if (entity instanceof org.bukkit.entity.ArmorStand && settings.protectArmorStands()) {
             return null;
         }
@@ -66,6 +79,14 @@ public final class RemovalEvaluator {
         if (entity instanceof Mob mob && settings.protectNameTaggedMobs()) {
             String customName = mob.getCustomName();
             if (customName != null && !customName.isBlank()) {
+                return null;
+            }
+        }
+
+        // Spawn-reason filter: restrict shields the entity from category-based removal.
+        if (!spawnFilter.isEmpty()) {
+            CreatureSpawnEvent.SpawnReason spawnReason = entity.getEntitySpawnReason();
+            if (spawnFilter.isRestricted(spawnReason)) {
                 return null;
             }
         }

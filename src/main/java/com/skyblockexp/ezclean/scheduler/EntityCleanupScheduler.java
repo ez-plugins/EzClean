@@ -216,7 +216,7 @@ public final class EntityCleanupScheduler {
                         continue;
                     }
                     for (Entity entity : world.getEntities()) {
-                        String removalGroup = removalEvaluator.evaluateRemovalGroup(entity, settings, pileDetector);
+                        String removalGroup = removalEvaluator.evaluateRemovalGroup(entity, settings, world.getName(), pileDetector);
                         if (removalGroup != null) {
                             toRemove.add(entity);
                             groupCounts.merge(removalGroup, 1, Integer::sum);
@@ -264,7 +264,7 @@ public final class EntityCleanupScheduler {
                 continue;
             }
             for (Entity entity : world.getEntities()) {
-                String removalGroup = removalEvaluator.evaluateRemovalGroup(entity, settings, pileDetector);
+                String removalGroup = removalEvaluator.evaluateRemovalGroup(entity, settings, world.getName(), pileDetector);
                 if (removalGroup != null) {
                     toRemove.add(entity);
                     groupCounts.merge(removalGroup, 1, Integer::sum);
@@ -404,8 +404,8 @@ public final class EntityCleanupScheduler {
     // Backwards-compatibility helper used by existing unit tests which reflectively
     // invoke this method. Delegates to RemovalEvaluator so logic remains testable.
     private @Nullable String evaluateRemovalGroup(Entity entity, CleanupSettings settings,
-            @Nullable EntityPileDetector pileDetector) {
-        return removalEvaluator.evaluateRemovalGroup(entity, settings, pileDetector);
+            String worldName, @Nullable EntityPileDetector pileDetector) {
+        return removalEvaluator.evaluateRemovalGroup(entity, settings, worldName, pileDetector);
     }
 
     private void sendWarningBroadcast(CleanupSettings settings, long minutesRemaining) {
@@ -529,7 +529,7 @@ public final class EntityCleanupScheduler {
                 continue;
             }
             for (Entity entity : world.getEntities()) {
-                if (removalEvaluator.evaluateRemovalGroup(entity, settings, pileDetector) != null) {
+                if (removalEvaluator.evaluateRemovalGroup(entity, settings, world.getName(), pileDetector) != null) {
                     pileDetector.recordEntity(entity);
                 }
             }
