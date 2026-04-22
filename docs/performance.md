@@ -15,8 +15,17 @@ server's entity counts justify it.
 1. **Collect phase** — EzClean iterates loaded entities in each enabled world, evaluates each
    against the removal rules, and builds a `List<Entity>` of candidates. No entities are
    removed yet.
-2. **Remove phase** — entities are removed one by one (synchronous) or in batches across
-   multiple ticks (async removal mode).
+   - *Paper/Spigot with `async-removal: true`*: this phase runs on a background thread so the
+     main thread is never blocked by the scan.
+   - *Folia*: region threading requires the scan to run on the global region thread.
+2. **Remove phase** — behaviour depends on the server platform:
+   - *Paper/Spigot*: entity removal must run on the main thread. Large lists (> 500 entities)
+     are spread across multiple ticks (500 entities/tick) to smooth the spike.
+   - *Folia with `async-removal: true`*: each entity's `remove()` is dispatched to the thread
+     that owns its chunk region via the entity scheduler. All removals execute concurrently
+     across region threads at the next region tick.
+   - *Folia with `async-removal: false`*: entities are removed synchronously on the global
+     region thread.
 3. **Stats phase** — duration, entity counts, and TPS samples are recorded. The stats file is
    written asynchronously so I/O never blocks the main thread.
 
@@ -25,13 +34,23 @@ server's entity counts justify it.
 By default, all entities are removed in a single tick. On servers with tens of thousands of
 entities scheduled for removal, this can cause a noticeable TPS spike.
 
-**Async removal** spreads the removal work across multiple ticks (500 entities per tick),
-smoothing the frame time impact.
+Enabling **async removal** improves throughput in a platform-specific way:
+
+| Platform | Collect phase | Remove phase |
+|---|---|---|
+| Paper / Spigot | Runs on a background thread — main thread unblocked during scan | Batched onto the main thread (`async-removal-batch-size` entities/tick) to comply with Bukkit thread rules |
+| Folia | Runs on the global region thread (required by Folia) | Dispatched concurrently to each entity's owning region thread via the entity scheduler |
 
 {: .warning }
-"Async removal" is misleading naming — entity removal in Bukkit **must** run on the main
-thread. What this feature does is schedule 500-entity batches across consecutive ticks rather
-than removing everything in one tick. Do not confuse this with true multi-threading.
+On **Paper/Spigot** the removal phase still runs on the main thread because Bukkit entity
+operations are not thread-safe. The async scan removes the scan cost from the main thread,
+and tick-spreading limits per-tick removal cost to ~500 entities. Do not expect true
+off-thread removal on Paper/Spigot.
+
+{: .note }
+On **Folia** entity removal is genuinely concurrent — each `entity.remove()` is dispatched
+to the region thread that owns that entity's chunk, so hundreds of entities across different
+regions are removed in parallel.
 
 ### Enabling async removal
 
