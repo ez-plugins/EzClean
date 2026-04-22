@@ -3,7 +3,10 @@ description: Automated entity cleanup for Paper servers — keep your worlds tid
 baseurl: "/ezclean"
 url: "https://ez-plugins.github.io"
 
-theme: just-the-docs
+remote_theme: just-the-docs/just-the-docs
+
+plugins:
+  - jekyll-remote-theme
 
 # Navigation order for top-level pages
 nav_sort: case_insensitive
