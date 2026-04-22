@@ -95,9 +95,43 @@ protect:
   armor-stands: true
   display-entities: true
   # Prevent removal of mobs that have been tamed by players.
+  # WARNING: disabling this while passive-mobs removal is on will delete player pets.
   tamed-mobs: true
   # Skip mobs that have been given a custom name (e.g. via name tags).
   name-tagged-mobs: true
+  # Optional regex whitelist for name-tagged-mobs protection.
+  # When this list is non-empty only mobs whose custom name matches at least ONE
+  # of the patterns (case-insensitive) are protected. Mobs with names that match
+  # none of the patterns are treated as unnamed and subject to normal removal rules.
+  # Leave empty (default) to protect every named mob — the original behaviour.
+  # Example entries:
+  #   - "^Guard.*"        # protect any mob named "Guard…"
+  #   - "\\[Boss\\]"      # protect mobs with "[Boss]" anywhere in their name
+  name-tag-patterns: []
+
+  # Protect specific dropped items from being removed, based on their item metadata.
+  # Useful for custom-item plugins (e.g. MMOItems, Oraxen, ItemsAdder) that mark
+  # items with custom model data, special lore lines, or PDC keys.
+  item-metadata:
+    enabled: false
+    # Protect items whose custom model data matches one of these integer values.
+    # Use '*' as the sole entry to protect ALL items that have any custom model data set.
+    custom-model-data: []
+    # Protect items whose lore contains any of these strings (case-insensitive substring match).
+    # Each entry is checked independently against every lore line of the item.
+    lore-contains: []
+    # Protect items that carry a persistent data container key matching one of these entries.
+    # Format: "namespace:key"  (e.g. "myplugin:bound_item", "oraxen:id")
+    pdc-keys: []
+
+# Defensive entity-type blacklist.
+# The following types are protected by the built-in defensive blacklist and will
+# NEVER be removed by category-based rules (hostile-mobs, passive-mobs, etc.).
+# You can still force-remove them via entity-types.remove (use with caution).
+#   - WITHER
+#   - ENDER_DRAGON
+#   - WARDEN
+#   - ELDER_GUARDIAN
 
 entity-types:
   # Explicit entity types to always keep (overrides any removal rule).
