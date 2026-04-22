@@ -12,6 +12,7 @@ import java.util.Set;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.MemoryConfiguration;
@@ -92,6 +93,10 @@ public final class CleanupSettings {
     private final Set<String> enabledWorlds;
     private final Set<EntityType> forcedKeeps;
     private final Set<EntityType> forcedRemovals;
+    /** Regex patterns for the {@code protect.name-tag-patterns} option. Empty = protect all named mobs. */
+    private final List<Pattern> nameTagPatterns;
+    /** Item-metadata protection rules for dropped items. */
+    private final ItemMetadataFilter itemMetadataFilter;
     private final @Nullable PileDetectionSettings pileDetectionSettings;
     private final CleanupCancelSettings cancelSettings;
     private final boolean asyncRemoval;
@@ -119,6 +124,7 @@ public final class CleanupSettings {
             boolean protectArmorStands, boolean protectDisplayEntities, boolean protectTamedMobs,
             boolean protectNameTaggedMobs, Set<String> enabledWorlds,
             Set<EntityType> forcedKeeps, Set<EntityType> forcedRemovals,
+            List<Pattern> nameTagPatterns, ItemMetadataFilter itemMetadataFilter,
             @Nullable PileDetectionSettings pileDetectionSettings, CleanupCancelSettings cancelSettings,
             boolean asyncRemoval, int asyncRemovalBatchSize,
             SpawnReasonFilter globalSpawnReasonFilter, Map<String, SpawnReasonFilter> worldSpawnReasonFilters,
@@ -164,6 +170,8 @@ public final class CleanupSettings {
         this.enabledWorlds = Collections.unmodifiableSet(new HashSet<>(enabledWorlds));
         this.forcedKeeps = Collections.unmodifiableSet(new HashSet<>(forcedKeeps));
         this.forcedRemovals = Collections.unmodifiableSet(new HashSet<>(forcedRemovals));
+        this.nameTagPatterns = Collections.unmodifiableList(new ArrayList<>(nameTagPatterns));
+        this.itemMetadataFilter = itemMetadataFilter;
         this.pileDetectionSettings = pileDetectionSettings;
         this.cancelSettings = cancelSettings;
         this.asyncRemoval = asyncRemoval;
@@ -331,6 +339,13 @@ public final class CleanupSettings {
         Set<EntityType> remove = parseEntityTypes(section.getStringList("entity-types.remove"), logger,
                 sectionPath + ".entity-types.remove");
 
+        List<Pattern> nameTagPatterns = parseNameTagPatterns(
+                section.getStringList("protect.name-tag-patterns"), logger, sectionPath);
+
+        ItemMetadataFilter itemMetadataFilter = ItemMetadataFilter.parse(
+                section.getConfigurationSection("protect.item-metadata"), logger,
+                sectionPath + ".protect.item-metadata");
+
         PileDetectionSettings pileDetectionSettings = loadPileDetectionSettings(section, logger, sectionPath);
         boolean asyncRemoval = section.getBoolean("performance.async-removal", false);
         int asyncRemovalBatchSize = Math.max(1, section.getInt("performance.async-removal-batch-size", 500));
@@ -395,6 +410,9 @@ public final class CleanupSettings {
 
         List<String> postCleanupCommands = section.getStringList("post-cleanup-commands");
 
+        warnDangerousSettings(cleanerId, removePassiveMobs, removeVillagers, protectTamedMobs,
+                asyncRemoval, asyncRemovalBatchSize, remove, logger);
+
         return new CleanupSettings(cleanerId, cleanupIntervalTicks, warningOffsetTicks, warningEnabled, startEnabled,
                 summaryEnabled, intervalEnabled, intervalMinutesBetweenBroadcasts, intervalMessage, dynamicEnabled,
                 dynamicMinutes, dynamicSeconds, dynamicMessage, statsSummaryEnabled, statsSummaryEveryRuns, statsSummaryMessage,
@@ -402,8 +420,8 @@ public final class CleanupSettings {
                 removeHostileMobs, removePassiveMobs, removeVillagers, removeVehicles, removeDroppedItems,
                 removeProjectiles, removeExperienceOrbs, removeAreaEffectClouds, removeFallingBlocks, removePrimedTnt,
                 protectPlayers, protectArmorStands, protectDisplayEntities, protectTamedMobs, protectNameTaggedMobs,
-                worlds, keep, remove, pileDetectionSettings, cancelSettings, asyncRemoval, asyncRemovalBatchSize,
-                globalSpawnReasonFilter, worldSpawnReasonFilters,
+                worlds, keep, remove, nameTagPatterns, itemMetadataFilter, pileDetectionSettings, cancelSettings,
+                asyncRemoval, asyncRemovalBatchSize, globalSpawnReasonFilter, worldSpawnReasonFilters,
                 globalMinPlayers, worldMinPlayersMap, worldIntervalMap, postCleanupCommands);
     }
 
@@ -528,6 +546,72 @@ public final class CleanupSettings {
             return Collections.singleton("*");
         }
         return Collections.unmodifiableSet(results);
+    }
+
+    /**
+     * Parses {@code protect.name-tag-patterns} into compiled {@link Pattern} objects.
+     * Invalid regex entries are logged as warnings and skipped.
+     */
+    private static List<Pattern> parseNameTagPatterns(List<String> raw, @Nullable Logger logger, String sectionPath) {
+        if (raw == null || raw.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<Pattern> patterns = new ArrayList<>();
+        for (String entry : raw) {
+            if (entry == null || entry.isBlank()) {
+                continue;
+            }
+            try {
+                patterns.add(Pattern.compile(entry, Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE));
+            } catch (PatternSyntaxException ex) {
+                if (logger != null) {
+                    logger.warning("Invalid protect.name-tag-patterns entry in '" + sectionPath
+                            + "': " + entry + " — " + ex.getMessage());
+                }
+            }
+        }
+        return patterns.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(patterns);
+    }
+
+    /**
+     * Emits startup warnings for configuration combinations that are likely to cause
+     * unintended or destructive behaviour.
+     */
+    private static void warnDangerousSettings(String cleanerId, boolean removePassiveMobs,
+            boolean removeVillagers, boolean protectTamedMobs,
+            boolean asyncRemoval, int asyncRemovalBatchSize,
+            Set<EntityType> forcedRemovals, @Nullable Logger logger) {
+        if (logger == null) {
+            return;
+        }
+        if (removePassiveMobs && !protectTamedMobs) {
+            logger.warning(String.format(
+                    "[EzClean][%s] DANGEROUS CONFIG: remove.passive-mobs is true and "
+                            + "protect.tamed-mobs is false — tamed pets WILL be removed during cleanups!",
+                    cleanerId));
+        }
+        if (removeVillagers) {
+            logger.warning(String.format(
+                    "[EzClean][%s] WARNING: remove.villagers is true — villagers and wandering traders "
+                            + "will be removed. Ensure this is intentional (e.g. not on a survival or economy server).",
+                    cleanerId));
+        }
+        if (asyncRemoval && asyncRemovalBatchSize > 1000) {
+            logger.warning(String.format(
+                    "[EzClean][%s] WARNING: performance.async-removal-batch-size is very high (%d). "
+                            + "Consider reducing this to avoid hitches on large servers.",
+                    cleanerId, asyncRemovalBatchSize));
+        }
+        Set<String> bossNames = Set.of("WITHER", "ENDER_DRAGON", "WARDEN", "ELDER_GUARDIAN");
+        for (EntityType type : forcedRemovals) {
+            if (bossNames.contains(type.name())) {
+                logger.warning(String.format(
+                        "[EzClean][%s] WARNING: entity-types.remove contains '%s', which is a boss "
+                                + "entity protected by the defensive blacklist. This override is intentional "
+                                + "but may surprise players.",
+                        cleanerId, type.name()));
+            }
+        }
     }
 
     private static Set<EntityType> parseEntityTypes(List<String> entries, Logger logger, String path) {
@@ -716,6 +800,21 @@ public final class CleanupSettings {
 
     public boolean isForcedRemoval(EntityType type) {
         return forcedRemovals.contains(type);
+    }
+
+    /**
+     * Returns the compiled name-tag protection patterns for this profile.
+     * An empty list means <em>all</em> named mobs are protected (default behaviour).
+     * When non-empty, only mobs whose custom name matches at least one pattern are
+     * protected by the name-tagged-mobs rule.
+     */
+    public List<Pattern> getNameTagPatterns() {
+        return nameTagPatterns;
+    }
+
+    /** Returns the item-metadata protection filter for dropped items. */
+    public ItemMetadataFilter getItemMetadataFilter() {
+        return itemMetadataFilter;
     }
 
     public boolean isPileDetectionEnabled() {
