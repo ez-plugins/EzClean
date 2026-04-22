@@ -7,6 +7,7 @@ remote_theme: just-the-docs/just-the-docs
 
 plugins:
   - jekyll-remote-theme
+  - jekyll-seo-tag
 
 # Navigation order for top-level pages
 nav_sort: case_insensitive
