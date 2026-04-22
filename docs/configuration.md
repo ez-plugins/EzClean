@@ -39,6 +39,18 @@ Create additional profiles by copying `default.yml` and giving it a new name, e.
 interval-minutes: 60
 ```
 
+### Minimum player gate
+
+Skip a cleanup run entirely when fewer than N players are online globally.
+Useful for empty or near-empty servers where cleanup work is unnecessary.
+
+```yaml
+# 0 (default) — always run regardless of player count.
+min-players: 0
+```
+
+A per-world threshold can also be set inside `world-overrides` (see [per-world overrides](#per-world-overrides) below).
+
 ### Warning broadcast
 
 ```yaml
@@ -136,6 +148,66 @@ entity-types:
   keep: []     # always kept, overrides remove rules
   remove: []   # always removed, after keep/protect rules
 ```
+
+### Spawn-reason filtering
+
+Filter entity removal based on how an entity was originally spawned.
+
+```yaml
+spawn-reasons:
+  restrict: []       # never remove entities with these reasons
+  force-remove: []   # always remove, bypassing tamed/name-tagged protection
+```
+
+Common reason names: `NATURAL`, `SPAWNER`, `SPAWNER_EGG`, `BREEDING`, `CHUNK_GEN`,
+`CUSTOM`, `COMMAND`, `EGG`, `DISPENSE_EGG`, `BUILD_SNOWMAN`, `VILLAGE_DEFENSE`,
+`REINFORCEMENTS`, `JOCKEY`, `TRAP` (case-insensitive).
+
+### Per-world overrides
+
+Override any combination of `spawn-reasons`, `interval-minutes`, and `min-players` for a
+specific world. Keys are optional — omit any key to inherit the global profile value.
+
+```yaml
+world-overrides:
+  world_nether:
+    # Independent cleanup interval for this world only.
+    # The global timer skips this world when a per-world interval is configured.
+    # Omit or set to -1 to fall back to the global interval.
+    interval-minutes: 30
+
+    # Skip cleaning this world when fewer than N players are present inside it.
+    # 0 (default) — always clean regardless of occupancy.
+    min-players: 1
+
+    # spawn-reasons replaces (does not merge with) the global block for this world.
+    spawn-reasons:
+      restrict: []
+      force-remove: []
+```
+
+{: .note }
+Per-world interval timers fire **silently** — no countdown broadcasts are sent for them.
+Warning and dynamic/interval broadcasts still come from the global timer only.
+
+### Post-cleanup commands
+
+Run arbitrary console commands immediately after every cleanup finishes, once the
+removal and summary broadcast are complete.
+
+```yaml
+post-cleanup-commands: []
+```
+
+Example:
+
+```yaml
+post-cleanup-commands:
+  - execute in overworld run summon lightning_bolt ~ ~ ~
+  - say Cleanup complete!
+```
+
+Commands run as the console sender on the main thread in the listed order.
 
 ### Performance (async removal)
 
