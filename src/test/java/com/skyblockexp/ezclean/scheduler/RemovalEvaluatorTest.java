@@ -247,4 +247,128 @@ class RemovalEvaluatorTest {
         // In "world_nether": override has empty restrict list — removed.
         assertEquals("hostile-mobs", evaluator.evaluateRemovalGroup(zombie, settings, "world_nether", null));
     }
+
+    // -----------------------------------------------------------------------
+    // Defensive blacklist tests
+    // -----------------------------------------------------------------------
+
+    @Test
+    void builtinSafeTypesAreNotRemovedByHostileRule() {
+        YamlConfiguration config = new YamlConfiguration();
+        ConfigurationSection cleaners = config.createSection("cleaners");
+        ConfigurationSection cleaner = cleaners.createSection("test");
+        cleaner.set("interval-minutes", 5);
+        cleaner.set("remove.hostile-mobs", true);
+
+        CleanupSettings settings = CleanupSettings.fromConfiguration(config, Logger.getLogger("test")).get(0);
+
+        for (String bossName : List.of("WITHER", "ENDER_DRAGON", "WARDEN", "ELDER_GUARDIAN")) {
+            EntityType bossType = findEntityType(bossName);
+            if (bossType == null) {
+                continue; // not available in this server version
+            }
+            Entity boss = Mockito.mock(org.bukkit.entity.Enemy.class);
+            Mockito.when(boss.getType()).thenReturn(bossType);
+            RemovalEvaluator evaluator = new RemovalEvaluator(null);
+            assertNull(evaluator.evaluateRemovalGroup(boss, settings, "", null),
+                    bossName + " should be protected by the defensive blacklist");
+        }
+    }
+
+    @Test
+    void forceRemoveOverridesDefensiveBlacklist() {
+        EntityType witherType = findEntityType("WITHER");
+        if (witherType == null) {
+            return; // WITHER not available in this server version
+        }
+
+        YamlConfiguration config = new YamlConfiguration();
+        ConfigurationSection cleaners = config.createSection("cleaners");
+        ConfigurationSection cleaner = cleaners.createSection("test");
+        cleaner.set("interval-minutes", 5);
+        cleaner.set("remove.hostile-mobs", true);
+        cleaner.set("entity-types.remove", List.of("WITHER"));
+
+        CleanupSettings settings = CleanupSettings.fromConfiguration(config, Logger.getLogger("test")).get(0);
+
+        Entity wither = Mockito.mock(org.bukkit.entity.Enemy.class);
+        Mockito.when(wither.getType()).thenReturn(witherType);
+
+        RemovalEvaluator evaluator = new RemovalEvaluator(null);
+        assertEquals("forced-removal", evaluator.evaluateRemovalGroup(wither, settings, "", null),
+                "Explicit entity-types.remove must override the defensive blacklist");
+    }
+
+    // -----------------------------------------------------------------------
+    // Name-tag pattern tests
+    // -----------------------------------------------------------------------
+
+    @Test
+    void nameTagPatternsProtectMatchingNames() {
+        YamlConfiguration config = new YamlConfiguration();
+        ConfigurationSection cleaners = config.createSection("cleaners");
+        ConfigurationSection cleaner = cleaners.createSection("test");
+        cleaner.set("interval-minutes", 5);
+        cleaner.set("remove.hostile-mobs", true);
+        cleaner.set("protect.name-tagged-mobs", true);
+        cleaner.set("protect.name-tag-patterns", List.of("^Guard.*", "\\[Boss\\]"));
+
+        CleanupSettings settings = CleanupSettings.fromConfiguration(config, Logger.getLogger("test")).get(0);
+
+        org.bukkit.entity.Zombie guardZombie = Mockito.mock(org.bukkit.entity.Zombie.class);
+        Mockito.when(guardZombie.getType()).thenReturn(EntityType.ZOMBIE);
+        Mockito.when(guardZombie.getCustomName()).thenReturn("Guard Zombie");
+
+        org.bukkit.entity.Zombie bossZombie = Mockito.mock(org.bukkit.entity.Zombie.class);
+        Mockito.when(bossZombie.getType()).thenReturn(EntityType.ZOMBIE);
+        Mockito.when(bossZombie.getCustomName()).thenReturn("Undead [Boss]");
+
+        RemovalEvaluator evaluator = new RemovalEvaluator(null);
+        assertNull(evaluator.evaluateRemovalGroup(guardZombie, settings, "", null),
+                "Name matching pattern should be protected");
+        assertNull(evaluator.evaluateRemovalGroup(bossZombie, settings, "", null),
+                "Name matching [Boss] pattern should be protected");
+    }
+
+    @Test
+    void nameTagPatternsDoNotProtectNonMatchingNames() {
+        YamlConfiguration config = new YamlConfiguration();
+        ConfigurationSection cleaners = config.createSection("cleaners");
+        ConfigurationSection cleaner = cleaners.createSection("test");
+        cleaner.set("interval-minutes", 5);
+        cleaner.set("remove.hostile-mobs", true);
+        cleaner.set("protect.name-tagged-mobs", true);
+        cleaner.set("protect.name-tag-patterns", List.of("^Guard.*"));
+
+        CleanupSettings settings = CleanupSettings.fromConfiguration(config, Logger.getLogger("test")).get(0);
+
+        org.bukkit.entity.Zombie randomZombie = Mockito.mock(org.bukkit.entity.Zombie.class);
+        Mockito.when(randomZombie.getType()).thenReturn(EntityType.ZOMBIE);
+        Mockito.when(randomZombie.getCustomName()).thenReturn("Bob");
+
+        RemovalEvaluator evaluator = new RemovalEvaluator(null);
+        assertEquals("hostile-mobs", evaluator.evaluateRemovalGroup(randomZombie, settings, "", null),
+                "Name not matching any pattern should not be protected");
+    }
+
+    @Test
+    void emptyNameTagPatternsProtectsAllNamedMobs() {
+        YamlConfiguration config = new YamlConfiguration();
+        ConfigurationSection cleaners = config.createSection("cleaners");
+        ConfigurationSection cleaner = cleaners.createSection("test");
+        cleaner.set("interval-minutes", 5);
+        cleaner.set("remove.hostile-mobs", true);
+        cleaner.set("protect.name-tagged-mobs", true);
+        // No patterns configured — should protect ALL named mobs
+
+        CleanupSettings settings = CleanupSettings.fromConfiguration(config, Logger.getLogger("test")).get(0);
+
+        org.bukkit.entity.Zombie namedZombie = Mockito.mock(org.bukkit.entity.Zombie.class);
+        Mockito.when(namedZombie.getType()).thenReturn(EntityType.ZOMBIE);
+        Mockito.when(namedZombie.getCustomName()).thenReturn("Anything");
+
+        RemovalEvaluator evaluator = new RemovalEvaluator(null);
+        assertNull(evaluator.evaluateRemovalGroup(namedZombie, settings, "", null),
+                "With no patterns, every named mob should be protected");
+    }
 }
