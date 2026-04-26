@@ -1,0 +1,174 @@
+# EzClean — Archivo de idioma Español (es)
+
+# ── Formato de duración ──────────────────────────────────────────────────────
+format:
+  duration:
+    instant: "menos de un minuto"
+    hour-s: "hora"
+    hour-p: "horas"
+    minute-s: "minuto"
+    minute-p: "minutos"
+    second-s: "segundo"
+    second-p: "segundos"
+    joiner: " y "
+  not-available: "N/D"
+  entries:
+    none: "Ninguno"
+    more: "+{n} más"
+    removed: "eliminados"
+
+# ── Mensajes de comandos ─────────────────────────────────────────────────────
+command:
+  no-profiles: "No hay perfiles de limpieza configurados actualmente."
+  no-permission: "No tienes permiso para usar este comando."
+  unknown-subcommand: "Subcomando desconocido \"{name}\". Usa /{label} help para ver los comandos disponibles."
+
+  # /ezclean (uso principal)
+  main:
+    subtitle: "Limpieza automática de entidades para servidores de Minecraft"
+    quick-commands: "Comandos rápidos:"
+    footer: "Usa /{label} help para ver todos los comandos disponibles."
+    cmd-help: "Mostrar ayuda detallada de comandos"
+    cmd-run: "Activar limpieza manualmente"
+    cmd-time: "Comprobar tiempo hasta la próxima limpieza"
+    cmd-stats: "Ver estadísticas de limpieza"
+
+  # /ezclean help
+  help:
+    title: "Referencia de comandos"
+    section-player: "Comandos de jugador"
+    section-admin: "Comandos de administrador"
+    hover-fill: "Haz clic para completar el comando"
+    id-note: "[id] = ID del perfil de limpieza. Omitir si solo hay un perfil configurado."
+    cmd-time: "Tiempo hasta la próxima limpieza"
+    cmd-cancel: "Retrasar una limpieza próxima"
+    cmd-stats: "Ver estadísticas de limpieza"
+    cmd-help: "Mostrar este mensaje de ayuda"
+    cmd-run: "Iniciar un ciclo de limpieza ahora"
+    cmd-reload: "Recargar la configuración del plugin"
+    cmd-setup: "Abrir la interfaz de configuración interactiva"
+    cmd-toggle: "Activar o desactivar una función"
+    cmd-usage: "Inspeccionar tareas del planificador"
+
+  # /ezclean time
+  time:
+    header: "Temporizadores de limpieza"
+    not-scheduled: "no programado"
+    hover-cancel: "Haz clic para cancelar la limpieza {id}"
+    idle: "\"{id}\" no está programado actualmente."
+    result: "La limpieza de \"{id}\" se ejecutará en {duration}."
+    no-match: "Ningún perfil de limpieza coincide con \"{id}\"."
+
+  # /ezclean run
+  run:
+    multiple: "Hay varios perfiles de limpieza disponibles. Especifica uno: {ids}"
+    no-match: "Ningún perfil de limpieza coincide con \"{id}\"."
+    available: " Disponibles: "
+    idle: "\"{id}\" no está programado actualmente."
+    triggered: "Limpieza iniciada para \"{id}\"."
+
+  # /ezclean reload
+  reload:
+    success: "Configuración recargada."
+    loaded-prefix: " Cargado "
+    profile-single: "1 perfil"
+    profiles-plural: "{n} perfiles"
+    colon: ": "
+    none: "ninguno"
+
+  # /ezclean stats
+  stats:
+    header: "Estadísticas de limpieza para "
+    multiple: "Varios perfiles disponibles. Especifica uno: "
+    no-match: "Ningún perfil de limpieza coincide con \"{id}\"."
+    no-stats: "No hay estadísticas de limpieza registradas aún para \"{id}\"."
+    row-total-runs: "Ejecuciones totales"
+    row-total-removed: "Total eliminados"
+    row-avg-duration: "Duración media"
+    row-avg-tps: "Impacto TPS medio"
+    top-groups: "  Grupos de entidades principales:"
+    top-worlds: "  Mundos principales:"
+    last-run: "Última ejecución"
+    last-removed: "  Eliminados"
+    last-duration: "  Duración"
+    last-tps: "  Impacto TPS"
+    last-groups: "    Grupos:"
+    last-worlds: "    Mundos:"
+
+  # /ezclean toggle
+  toggle:
+    unknown-feature: "Función desconocida \"{name}\"."
+    cleaner-features: "  Funciones de limpiador: "
+    global-features: "  Funciones globales:    "
+    no-match: "Ningún perfil de limpiador coincide con \"{id}\"."
+    available: " Disponibles: "
+    multiple: "Hay varios perfiles de limpiador configurados. Especifica: "
+    no-file: "No se encontró el archivo de configuración para el limpiador \"{id}\"."
+    save-failed: "Error al guardar la configuración del limpiador \"{id}\": {error}"
+    save-failed-global: "Error al guardar la configuración: {error}"
+    no-global-file: "No se puede encontrar el archivo de configuración para la función \"{name}\"."
+    no-global-file-missing: "No se encontró el archivo de configuración para \"{name}\". Inicia el servidor una vez para generarlo."
+    on: "ON"
+    off: "OFF"
+
+  # /ezclean cancel
+  cancel:
+    players-only: "Solo los jugadores pueden cancelar ciclos de limpieza."
+    multiple: "Varios perfiles disponibles. Especifica uno: "
+    available-label: "Disponibles: "
+    no-match: "Ningún perfil coincide con \"{id}\". "
+    no-match-simple: "Ningún perfil de limpieza coincide con \"{id}\"."
+    idle: "\"{id}\" no está programado actualmente."
+    funding-error: "No se pueden retirar fondos: {error}"
+    cancel-failed: "No se pudo cancelar la próxima limpieza."
+
+  # /ezclean usage (monitor del planificador)
+  scheduler:
+    stop-players-only: "Solo los jugadores pueden detener el monitor de uso en vivo."
+    stopped: "Monitor de uso asíncrono en vivo detenido."
+    no-monitor: "Actualmente no tienes un monitor de uso en vivo activo."
+    live-players-only: "Solo los jugadores pueden ver el monitor de uso en vivo."
+    no-activity: "No se detectó actividad del planificador."
+    no-activity-plugin: "No se encontró actividad del planificador para el plugin \"{name}\"."
+    tip: "Consejo: Usa /{label} usage live{suffix} para un gráfico asíncrono en vivo. Usa /{label} usage stop para cancelar."
+    started: "Monitor de uso asíncrono en vivo iniciado{suffix}. Usa /{label} usage stop para cancelar."
+    live-hint: "Los resúmenes en vivo se actualizan en tu barra de acción. Las actualizaciones del chat aparecen cuando la carga cambia significativamente."
+    header-live: "Uso del planificador asíncrono en vivo"
+    header-static: "Resumen de uso del planificador"
+    no-activity-filter: "No hay actividad del planificador que coincida con el filtro."
+    stop-live: "Usa /{label} usage stop para cancelar la vista en vivo."
+    more-plugins-s: "\u2026 más {n} plugin adicional."
+    more-plugins-p: "\u2026 más {n} plugins adicionales."
+  # /ezclean setup
+  setup:
+    players-only: "La interfaz de configuración solo la puede abrir un jugador."
+# ── Aviso de actualización ───────────────────────────────────────────────────
+update:
+  available: "Actualización de EzClean disponible: v{version}. "
+  download: "[Descargar]"
+
+# ── Contenido predeterminado de mensajes de difusión ─────────────────────────
+# Formato MiniMessage; los marcadores de posición usan el estilo {nombre}.
+defaults:
+  warning:
+    message: "<yellow>\u26a0 Limpieza de entidades en <gold>{minutes}</gold> minutos. \u00a1Guarda tus objetos valiosos!</yellow>"
+  broadcast:
+    start:
+      message: "<red><bold>\u2726 Iniciando limpieza de entidades...</bold></red>"
+    summary:
+      message: "<gray>\u2713 <gold>{count}</gold> entidades eliminadas. Pr\u00f3xima limpieza en <gold>{minutes}</gold> minutos.</gray>"
+    pre-clean:
+      message: ""
+    interval:
+      message: "<yellow>\u26a0 Limpieza de entidades en <gold>{minutes}</gold> minutos. \u00a1Guarda tus objetos valiosos!</yellow>"
+    dynamic:
+      message: "<yellow>\u26a0 Limpieza de entidades en <gold>{minutes}</gold> minutos. \u00a1Guarda tus objetos valiosos!</yellow>"
+  stats-summary:
+    message: "<gray>Estad\u00edsticas de limpieza para <aqua>{cleaner}</aqua>: <gold>{runs}</gold> ejecuciones, <gold>{total_removed}</gold> eliminados. Duraci\u00f3n media: <gold>{avg_duration}</gold>. Impacto TPS medio: <gold>{avg_tps_impact}</gold>. Grupos principales: {top_groups}. Mundos principales: {top_worlds}.</gray>"
+  cancel:
+    hover-message: "<yellow>Haz clic para pagar <gold>{cost}</gold> y cancelar esta limpieza.</yellow>"
+    success-message: "<green>Pagaste <gold>{cost}</gold> para cancelar la limpieza <aqua>{cleaner}</aqua>.</green>"
+    broadcast-message: "<gold>{player}</gold> cancel\u00f3 la limpieza <aqua>{cleaner}</aqua>. Pr\u00f3xima limpieza en <yellow>{minutes}</yellow> minutos."
+    insufficient-funds-message: "<red>Necesitas <gold>{cost}</gold> para cancelar la limpieza.</red>"
+    disabled-message: "<red>Esta limpieza no puede ser cancelada.</red>"
+    no-economy-message: "<red>La econom\u00eda no est\u00e1 disponible. La limpieza no puede ser cancelada.</red>"

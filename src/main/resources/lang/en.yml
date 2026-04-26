@@ -1,0 +1,177 @@
+# EzClean — English language file (en)
+
+# ── Duration formatting ─────────────────────────────────────────────────────
+format:
+  duration:
+    instant: "less than a minute"
+    hour-s: "hour"
+    hour-p: "hours"
+    minute-s: "minute"
+    minute-p: "minutes"
+    second-s: "second"
+    second-p: "seconds"
+    joiner: " and "
+  not-available: "N/A"
+  entries:
+    none: "None"
+    more: "+{n} more"
+    removed: "removed"
+
+# ── Command messages ─────────────────────────────────────────────────────────
+command:
+  no-profiles: "No cleanup profiles are currently configured."
+  no-permission: "You do not have permission to use this command."
+  unknown-subcommand: "Unknown subcommand \"{name}\". Use /{label} help for available commands."
+
+  # /ezclean (root usage)
+  main:
+    subtitle: "Automated entity cleanup for Minecraft servers"
+    quick-commands: "Quick Commands:"
+    footer: "Use /{label} help for all available commands."
+    cmd-help: "Show detailed command help"
+    cmd-run: "Trigger cleanup manually"
+    cmd-time: "Check next cleanup time"
+    cmd-stats: "View cleanup statistics"
+
+  # /ezclean help
+  help:
+    title: "Command Reference"
+    section-player: "Player Commands"
+    section-admin: "Admin Commands"
+    hover-fill: "Click to fill command"
+    id-note: "[id] = cleaner profile ID. Omit when only one profile is configured."
+    cmd-time: "Time until next cleanup"
+    cmd-cancel: "Delay an upcoming cleanup"
+    cmd-stats: "View cleanup statistics"
+    cmd-help: "Show this help message"
+    cmd-run: "Trigger a cleanup cycle now"
+    cmd-reload: "Reload plugin configuration"
+    cmd-setup: "Open the interactive setup GUI"
+    cmd-toggle: "Toggle a feature on/off"
+    cmd-usage: "Inspect scheduler tasks"
+
+  # /ezclean time
+  time:
+    header: "Cleanup Timers"
+    not-scheduled: "not scheduled"
+    hover-cancel: "Click to cancel {id} cleanup"
+    idle: "\"{id}\" is not currently scheduled."
+    result: "Cleanup for \"{id}\" runs in {duration}."
+    no-match: "No cleanup profile matches \"{id}\"."
+
+  # /ezclean run
+  run:
+    multiple: "Multiple cleanup profiles available. Specify one of: {ids}"
+    no-match: "No cleanup profile matches \"{id}\"."
+    available: " Available: "
+    idle: "\"{id}\" is not currently scheduled."
+    triggered: "Triggered cleanup for \"{id}\"."
+
+  # /ezclean reload
+  reload:
+    success: "Configuration reloaded."
+    loaded-prefix: " Loaded "
+    profile-single: "1 profile"
+    profiles-plural: "{n} profiles"
+    colon: ": "
+    none: "none"
+
+  # /ezclean stats
+  stats:
+    header: "Cleanup stats for "
+    multiple: "Multiple profiles available. Specify one of: "
+    no-match: "No cleanup profile matches \"{id}\"."
+    no-stats: "No cleanup stats recorded yet for \"{id}\"."
+    row-total-runs: "Total runs"
+    row-total-removed: "Total removed"
+    row-avg-duration: "Avg duration"
+    row-avg-tps: "Avg TPS impact"
+    top-groups: "  Top entity groups:"
+    top-worlds: "  Top worlds:"
+    last-run: "Last Run"
+    last-removed: "  Removed"
+    last-duration: "  Duration"
+    last-tps: "  TPS impact"
+    last-groups: "    Groups:"
+    last-worlds: "    Worlds:"
+
+  # /ezclean toggle
+  toggle:
+    unknown-feature: "Unknown feature \"{name}\"."
+    cleaner-features: "  Cleaner features: "
+    global-features: "  Global features:  "
+    no-match: "No cleaner profile matches \"{id}\"."
+    available: " Available: "
+    multiple: "Multiple cleaner profiles configured. Specify: "
+    no-file: "No cleaner config file found for \"{id}\"."
+    save-failed: "Failed to save config for cleaner \"{id}\": {error}"
+    save-failed-global: "Failed to save config: {error}"
+    no-global-file: "Cannot resolve config file for feature \"{name}\"."
+    no-global-file-missing: "Configuration file for \"{name}\" not found. Start the server once to generate it."
+    on: "ON"
+    off: "OFF"
+
+  # /ezclean cancel
+  cancel:
+    players-only: "Only players may cancel cleanup cycles."
+    multiple: "Multiple profiles available. Specify one of: "
+    available-label: "Available: "
+    no-match: "No profile matches \"{id}\". "
+    no-match-simple: "No cleanup profile matches \"{id}\"."
+    idle: "\"{id}\" is not currently scheduled."
+    funding-error: "Unable to withdraw funds: {error}"
+    cancel-failed: "Failed to cancel the upcoming cleanup."
+
+  # /ezclean usage (scheduler monitor)
+  scheduler:
+    stop-players-only: "Only players may stop the live usage monitor."
+    stopped: "Stopped the live async usage monitor."
+    no-monitor: "You do not currently have a live usage monitor running."
+    live-players-only: "Only players may view the live usage monitor."
+    no-activity: "No scheduler activity detected."
+    no-activity-plugin: "No scheduler activity found for plugin \"{name}\"."
+    tip: "Tip: Use /{label} usage live{suffix} for a live async graph. Use /{label} usage stop to cancel."
+    started: "Started live async usage monitor{suffix}. Use /{label} usage stop to cancel."
+    live-hint: "Live summaries refresh in your action bar. Chat updates appear when the load meaningfully changes."
+    header-live: "Live async scheduler usage"
+    header-static: "Scheduler usage overview"
+    no-activity-filter: "No scheduler activity currently matches the filter."
+    stop-live: "Use /{label} usage stop to cancel the live view."
+    more-plugins-s: "\u2026 plus {n} more plugin."
+    more-plugins-p: "\u2026 plus {n} more plugins."
+
+  # /ezclean setup
+  setup:
+    players-only: "The setup GUI can only be opened by a player."
+
+# ── Update notice ────────────────────────────────────────────────────────────
+update:
+  available: "EzClean update available: v{version}. "
+  download: "[Download]"
+
+# ── Broadcast message defaults ───────────────────────────────────────────────
+# These supply the default text when no cleaner-specific or messages.yml override is set.
+# MiniMessage format; placeholders use {name} style.
+defaults:
+  warning:
+    message: "<yellow>\u26a0 Entity cleanup in <gold>{minutes}</gold> minutes. Clear valuables!</yellow>"
+  broadcast:
+    start:
+      message: "<red><bold>\u2726 Entity cleanup commencing...</bold></red>"
+    summary:
+      message: "<gray>\u2713 Removed <gold>{count}</gold> entities. Next cleanup in <gold>{minutes}</gold> minutes.</gray>"
+    pre-clean:
+      message: ""
+    interval:
+      message: "<yellow>\u26a0 Entity cleanup in <gold>{minutes}</gold> minutes. Clear valuables!</yellow>"
+    dynamic:
+      message: "<yellow>\u26a0 Entity cleanup in <gold>{minutes}</gold> minutes. Clear valuables!</yellow>"
+  stats-summary:
+    message: "<gray>Cleanup stats for <aqua>{cleaner}</aqua>: <gold>{runs}</gold> runs, <gold>{total_removed}</gold> removed total. Avg duration: <gold>{avg_duration}</gold>. Avg TPS impact: <gold>{avg_tps_impact}</gold>. Top groups: {top_groups}. Top worlds: {top_worlds}.</gray>"
+  cancel:
+    hover-message: "<yellow>Click to pay <gold>{cost}</gold> to cancel this cleanup.</yellow>"
+    success-message: "<green>You paid <gold>{cost}</gold> to cancel the <aqua>{cleaner}</aqua> cleanup.</green>"
+    broadcast-message: "<gold>{player}</gold> canceled the <aqua>{cleaner}</aqua> cleanup. Next cleanup in <yellow>{minutes}</yellow> minutes."
+    insufficient-funds-message: "<red>You need <gold>{cost}</gold> to cancel the cleanup.</red>"
+    disabled-message: "<red>This cleanup cannot be canceled.</red>"
+    no-economy-message: "<red>Economy is unavailable. Cleanup cannot be canceled.</red>"
