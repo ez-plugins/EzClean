@@ -30,13 +30,13 @@ by all EzClean cleaner profiles during every cleanup run. The flag defaults to `
 
 Select a region with WorldEdit and run:
 
-```
+```bash
 /rg flag <region-name> ezclean-bypass allow
 ```
 
 To remove the bypass and restore normal cleanup behaviour:
 
-```
+```bash
 /rg flag <region-name> ezclean-bypass deny
 ```
 

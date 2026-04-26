@@ -1,13 +1,16 @@
 # EzClean
 
-EzClean is a lightweight Paper plugin that periodically removes unwanted entities and optionally manages death-chests. It's designed for performance and configurable cleaning profiles.
+EzClean is a lightweight Paper plugin that periodically removes unwanted entities and
+optionally manages death-chests. It's designed for performance and configurable cleaning profiles.
 
 ## Quick links
+
 - Documentation: docs/index.md
 - Contributing: CONTRIBUTING.md
 - License: MIT (see LICENSE)
 
 ## Requirements
+
 - Paper/PaperMC compatible server (see `plugin.yml` for supported versions)
 - Java runtime compatible with the build (see `pom.xml`)
 
@@ -15,7 +18,7 @@ EzClean is a lightweight Paper plugin that periodically removes unwanted entitie
 
 You can auto-generate cleaner profiles for each world using:
 
-```
+```text
 /ezclean autogenprofiles
 ```
 

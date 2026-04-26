@@ -23,7 +23,7 @@ standard placeholder engine for Bukkit plugins. EzClean integrates with it in tw
 The integration activates automatically when PlaceholderAPI is present. EzClean logs a
 confirmation line on startup:
 
-```
+```text
 [EzClean] Hooked into PlaceholderAPI — EzClean placeholders registered.
 ```
 

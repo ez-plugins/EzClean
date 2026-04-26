@@ -10,8 +10,12 @@ description: Automatic CPU profiling to identify the root source of entity build
 [Spark](https://spark.lucko.me/) is a performance profiling plugin for Minecraft servers.
 EzClean integrates with Spark in two ways:
 
-1. **Higher-quality TPS/MSPT data** — the [TPS-aware scheduling](../performance.md#tps--mspt-aware-scheduling) feature automatically switches to Spark's more accurate rolling averages when Spark is installed, instead of falling back to Bukkit reflection.
-2. **Automatic profiling on high entity counts** — when a cleanup run is about to remove more entities than a configurable threshold, EzClean starts a Spark profiler session so you can identify _why_ so many entities accumulated.
+1. **Higher-quality TPS/MSPT data** — the [TPS-aware scheduling](../performance.md#tps--mspt-aware-scheduling)
+   feature automatically switches to Spark's more accurate rolling averages when Spark is installed,
+   instead of falling back to Bukkit reflection.
+2. **Automatic profiling on high entity counts** — when a cleanup run is about to remove
+   more entities than a configurable threshold, EzClean starts a Spark profiler session
+   so you can identify _why_ so many entities accumulated.
 
 ---
 
@@ -23,7 +27,7 @@ EzClean integrates with Spark in two ways:
 
 When EzClean detects Spark on startup it logs:
 
-```
+```text
 [EzClean] Hooked into Spark — using Spark TPS/MSPT data; auto-profiler available.
 ```
 
@@ -47,14 +51,14 @@ No extra configuration is needed — the upgrade is transparent.
 When a cleanup run collects more entities for removal than the configured `threshold`, EzClean
 automatically dispatches:
 
-```
+```bash
 spark profiler start --order-by-count --timeout <duration-seconds>
 ```
 
 After `duration-seconds` seconds the profiler stops automatically and uploads a shareable report
 link to the console:
 
-```
+```text
 [Spark] Profile available at: https://spark.lucko.me/...
 ```
 
