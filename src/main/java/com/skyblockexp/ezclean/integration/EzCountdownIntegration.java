@@ -1,6 +1,5 @@
 package com.skyblockexp.ezclean.integration;
 
-import com.skyblockexp.ezclean.config.CleanupSettings;
 import com.skyblockexp.ezclean.config.EzCountdownSettings;
 
 import java.lang.invoke.MethodHandle;

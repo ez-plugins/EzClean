@@ -24,7 +24,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Level;
@@ -385,9 +384,14 @@ public final class SetupGUI {
 
         // Row 0: nav bar
         inv.setItem(SLOT_BACK,   buildBackItem());
-        inv.setItem(1, glass); inv.setItem(2, glass); inv.setItem(3, glass);
+        inv.setItem(1, glass);
+        inv.setItem(2, glass);
+        inv.setItem(3, glass);
         inv.setItem(SLOT_HEADER, buildHeaderItem(id));
-        inv.setItem(5, glass); inv.setItem(6, glass); inv.setItem(7, glass); inv.setItem(8, glass);
+        inv.setItem(5, glass);
+        inv.setItem(6, glass);
+        inv.setItem(7, glass);
+        inv.setItem(8, glass);
 
         // Row 1: removal toggles (9–17)
         for (int s = SLOT_HOSTILE; s <= SLOT_TNT; s++) {

@@ -475,61 +475,141 @@ public final class CleanupSettings {
     // Flat delegating getters — broadcast (backward-compatible API)
     // -----------------------------------------------------------------------------------------
 
-    public boolean isWarningEnabled() { return broadcastSettings.isWarningEnabled(); }
-    public long getWarningOffsetTicks() { return broadcastSettings.getWarningOffsetTicks(); }
-    public long getWarningMinutesBefore() { return broadcastSettings.getWarningMinutesBefore(); }
-    public String getWarningMessageTemplate() { return broadcastSettings.getWarningMessageTemplate(); }
+    public boolean isWarningEnabled() {
+        return broadcastSettings.isWarningEnabled();
+    }
+    public long getWarningOffsetTicks() {
+        return broadcastSettings.getWarningOffsetTicks();
+    }
+    public long getWarningMinutesBefore() {
+        return broadcastSettings.getWarningMinutesBefore();
+    }
+    public String getWarningMessageTemplate() {
+        return broadcastSettings.getWarningMessageTemplate();
+    }
 
-    public boolean isStartBroadcastEnabled() { return broadcastSettings.isStartBroadcastEnabled(); }
-    public String getStartMessageTemplate() { return broadcastSettings.getStartMessageTemplate(); }
+    public boolean isStartBroadcastEnabled() {
+        return broadcastSettings.isStartBroadcastEnabled();
+    }
+    public String getStartMessageTemplate() {
+        return broadcastSettings.getStartMessageTemplate();
+    }
 
-    public boolean isSummaryBroadcastEnabled() { return broadcastSettings.isSummaryBroadcastEnabled(); }
-    public String getSummaryMessageTemplate() { return broadcastSettings.getSummaryMessageTemplate(); }
-    public @Nullable String getPreCleanMessageTemplate() { return broadcastSettings.getPreCleanMessageTemplate(); }
+    public boolean isSummaryBroadcastEnabled() {
+        return broadcastSettings.isSummaryBroadcastEnabled();
+    }
+    public String getSummaryMessageTemplate() {
+        return broadcastSettings.getSummaryMessageTemplate();
+    }
+    public @Nullable String getPreCleanMessageTemplate() {
+        return broadcastSettings.getPreCleanMessageTemplate();
+    }
 
-    public boolean isIntervalBroadcastEnabled() { return broadcastSettings.isIntervalBroadcastEnabled(); }
-    public long getIntervalBroadcastMinutes() { return broadcastSettings.getIntervalBroadcastMinutes(); }
-    public String getIntervalBroadcastMessageTemplate() { return broadcastSettings.getIntervalBroadcastMessageTemplate(); }
+    public boolean isIntervalBroadcastEnabled() {
+        return broadcastSettings.isIntervalBroadcastEnabled();
+    }
+    public long getIntervalBroadcastMinutes() {
+        return broadcastSettings.getIntervalBroadcastMinutes();
+    }
+    public String getIntervalBroadcastMessageTemplate() {
+        return broadcastSettings.getIntervalBroadcastMessageTemplate();
+    }
 
-    public boolean isDynamicBroadcastEnabled() { return broadcastSettings.isDynamicBroadcastEnabled(); }
-    public Set<Long> getDynamicBroadcastMinutes() { return broadcastSettings.getDynamicBroadcastMinutes(); }
-    public Set<Long> getDynamicBroadcastSeconds() { return broadcastSettings.getDynamicBroadcastSeconds(); }
-    public String getDynamicBroadcastMessageTemplate() { return broadcastSettings.getDynamicBroadcastMessageTemplate(); }
+    public boolean isDynamicBroadcastEnabled() {
+        return broadcastSettings.isDynamicBroadcastEnabled();
+    }
+    public Set<Long> getDynamicBroadcastMinutes() {
+        return broadcastSettings.getDynamicBroadcastMinutes();
+    }
+    public Set<Long> getDynamicBroadcastSeconds() {
+        return broadcastSettings.getDynamicBroadcastSeconds();
+    }
+    public String getDynamicBroadcastMessageTemplate() {
+        return broadcastSettings.getDynamicBroadcastMessageTemplate();
+    }
 
-    public boolean isStatsSummaryBroadcastEnabled() { return broadcastSettings.isStatsSummaryBroadcastEnabled(); }
-    public long getStatsSummaryEveryRuns() { return broadcastSettings.getStatsSummaryEveryRuns(); }
-    public String getStatsSummaryMessageTemplate() { return broadcastSettings.getStatsSummaryMessageTemplate(); }
+    public boolean isStatsSummaryBroadcastEnabled() {
+        return broadcastSettings.isStatsSummaryBroadcastEnabled();
+    }
+    public long getStatsSummaryEveryRuns() {
+        return broadcastSettings.getStatsSummaryEveryRuns();
+    }
+    public String getStatsSummaryMessageTemplate() {
+        return broadcastSettings.getStatsSummaryMessageTemplate();
+    }
 
     // -----------------------------------------------------------------------------------------
     // Flat delegating getters — removal (backward-compatible API)
     // -----------------------------------------------------------------------------------------
 
-    public boolean removeHostileMobs() { return removalSettings.removeHostileMobs(); }
-    public boolean removePassiveMobs() { return removalSettings.removePassiveMobs(); }
-    public boolean removeVillagers() { return removalSettings.removeVillagers(); }
-    public boolean removeVehicles() { return removalSettings.removeVehicles(); }
-    public boolean removeDroppedItems() { return removalSettings.removeDroppedItems(); }
-    public boolean removeProjectiles() { return removalSettings.removeProjectiles(); }
-    public boolean removeExperienceOrbs() { return removalSettings.removeExperienceOrbs(); }
-    public boolean removeAreaEffectClouds() { return removalSettings.removeAreaEffectClouds(); }
-    public boolean removeFallingBlocks() { return removalSettings.removeFallingBlocks(); }
-    public boolean removePrimedTnt() { return removalSettings.removePrimedTnt(); }
-    public int getDroppedItemsMinAgeTicks() { return removalSettings.getDroppedItemsMinAgeTicks(); }
-    public int getExperienceOrbsMinAgeTicks() { return removalSettings.getExperienceOrbsMinAgeTicks(); }
-    public int getItemPlayerProximityBlocks() { return removalSettings.getItemPlayerProximityBlocks(); }
-    public int getOrbPlayerProximityBlocks() { return removalSettings.getOrbPlayerProximityBlocks(); }
+    public boolean removeHostileMobs() {
+        return removalSettings.removeHostileMobs();
+    }
+    public boolean removePassiveMobs() {
+        return removalSettings.removePassiveMobs();
+    }
+    public boolean removeVillagers() {
+        return removalSettings.removeVillagers();
+    }
+    public boolean removeVehicles() {
+        return removalSettings.removeVehicles();
+    }
+    public boolean removeDroppedItems() {
+        return removalSettings.removeDroppedItems();
+    }
+    public boolean removeProjectiles() {
+        return removalSettings.removeProjectiles();
+    }
+    public boolean removeExperienceOrbs() {
+        return removalSettings.removeExperienceOrbs();
+    }
+    public boolean removeAreaEffectClouds() {
+        return removalSettings.removeAreaEffectClouds();
+    }
+    public boolean removeFallingBlocks() {
+        return removalSettings.removeFallingBlocks();
+    }
+    public boolean removePrimedTnt() {
+        return removalSettings.removePrimedTnt();
+    }
+    public int getDroppedItemsMinAgeTicks() {
+        return removalSettings.getDroppedItemsMinAgeTicks();
+    }
+    public int getExperienceOrbsMinAgeTicks() {
+        return removalSettings.getExperienceOrbsMinAgeTicks();
+    }
+    public int getItemPlayerProximityBlocks() {
+        return removalSettings.getItemPlayerProximityBlocks();
+    }
+    public int getOrbPlayerProximityBlocks() {
+        return removalSettings.getOrbPlayerProximityBlocks();
+    }
 
     // -----------------------------------------------------------------------------------------
     // Flat delegating getters — protection (backward-compatible API)
     // -----------------------------------------------------------------------------------------
 
-    public boolean protectPlayers() { return protectSettings.protectPlayers(); }
-    public boolean protectArmorStands() { return protectSettings.protectArmorStands(); }
-    public boolean protectDisplayEntities() { return protectSettings.protectDisplayEntities(); }
-    public boolean protectTamedMobs() { return protectSettings.protectTamedMobs(); }
-    public boolean protectNameTaggedMobs() { return protectSettings.protectNameTaggedMobs(); }
-    public List<Pattern> getNameTagPatterns() { return protectSettings.getNameTagPatterns(); }
-    public ItemMetadataFilter getItemMetadataFilter() { return protectSettings.getItemMetadataFilter(); }
+    public boolean protectPlayers() {
+        return protectSettings.protectPlayers();
+    }
+    public boolean protectArmorStands() {
+        return protectSettings.protectArmorStands();
+    }
+    public boolean protectDisplayEntities() {
+        return protectSettings.protectDisplayEntities();
+    }
+    public boolean protectTamedMobs() {
+        return protectSettings.protectTamedMobs();
+    }
+    public boolean protectNameTaggedMobs() {
+        return protectSettings.protectNameTaggedMobs();
+    }
+    public List<Pattern> getNameTagPatterns() {
+        return protectSettings.getNameTagPatterns();
+    }
+    public ItemMetadataFilter getItemMetadataFilter() {
+        return protectSettings.getItemMetadataFilter();
+    }
 
     // -----------------------------------------------------------------------------------------
     // Configuration loading (private)

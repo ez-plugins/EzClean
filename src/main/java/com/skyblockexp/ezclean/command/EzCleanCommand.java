@@ -109,7 +109,7 @@ public final class EzCleanCommand implements CommandExecutor, TabCompleter {
         sendClickable(sender, label, "help",     Msg.t("command.main.cmd-help"));
         sendClickable(sender, label, "run [id]",  Msg.t("command.main.cmd-run"));
         sendClickable(sender, label, "time [id]", Msg.t("command.main.cmd-time"));
-        sendClickable(sender, label, "stats [id]",Msg.t("command.main.cmd-stats"));
+        sendClickable(sender, label, "stats [id]", Msg.t("command.main.cmd-stats"));
         sender.sendMessage(Component.empty());
         sender.sendMessage(Msg.info(Msg.t("command.main.footer", "label", label)));
     }

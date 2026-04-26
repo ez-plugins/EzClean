@@ -1,8 +1,6 @@
 package com.skyblockexp.ezclean.command;
 
 import com.skyblockexp.ezclean.gui.SetupGUI;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 

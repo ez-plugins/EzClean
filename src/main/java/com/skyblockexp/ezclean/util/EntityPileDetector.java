@@ -1,6 +1,5 @@
 package com.skyblockexp.ezclean.util;
 
-import com.skyblockexp.ezclean.config.CleanupSettings;
 import com.skyblockexp.ezclean.config.PileDetectionSettings;
 import java.util.ArrayList;
 import java.util.Comparator;

@@ -33,8 +33,8 @@ public class HelpSubcommand implements Subcommand {
         sendEntry(sender, label, "setup",                    Msg.t("command.help.cmd-setup"),  "ezclean.setup");
         sendEntry(sender, label, "run [id]",             Msg.t("command.help.cmd-run"),    "ezclean.clean");
         sendEntry(sender, label, "reload",                Msg.t("command.help.cmd-reload"), "ezclean.reload");
-        sendEntry(sender, label, "toggle <feature> [id]",Msg.t("command.help.cmd-toggle"), "ezclean.toggle");
-        sendEntry(sender, label, "usage [plugin|live|stop]",Msg.t("command.help.cmd-usage"),"ezclean.usage");
+        sendEntry(sender, label, "toggle <feature> [id]", Msg.t("command.help.cmd-toggle"), "ezclean.toggle");
+        sendEntry(sender, label, "usage [plugin|live|stop]", Msg.t("command.help.cmd-usage"), "ezclean.usage");
 
         sender.sendMessage(Component.empty());
         sender.sendMessage(Component.text("  " + Msg.t("command.help.id-note"),
