@@ -1,5 +1,6 @@
 package com.skyblockexp.ezclean.scheduler;
 
+import java.lang.reflect.Method;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -10,12 +11,20 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
+import com.skyblockexp.ezclean.util.ChunkCapTracker;
+import com.skyblockexp.ezclean.util.EntityMerger;
 import com.skyblockexp.ezclean.util.EntityPileDetector;
+import com.skyblockexp.ezclean.Registry;
+import com.skyblockexp.ezclean.integration.DiscordWebhookService;
 import com.skyblockexp.ezclean.util.FoliaScheduler;
 import com.skyblockexp.ezclean.stats.CleanupStatsTracker;
+import com.skyblockexp.ezclean.integration.EzCountdownIntegration;
+import com.skyblockexp.ezclean.integration.PapiHook;
+import com.skyblockexp.ezclean.integration.SparkHook;
 import com.skyblockexp.ezclean.integration.WorldGuardCleanupBypass;
 import com.skyblockexp.ezclean.config.CleanupSettings;
 import com.skyblockexp.ezclean.config.CleanupCancelSettings;
+import com.skyblockexp.ezclean.config.TpsAwareSettings;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
@@ -23,6 +32,7 @@ import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.World;
 import org.bukkit.entity.Entity;
@@ -38,6 +48,7 @@ import com.skyblockexp.ezclean.service.BroadcastService;
 public final class EntityCleanupScheduler {
 
     private static final MiniMessage MINI_MESSAGE = MiniMessage.miniMessage();
+    private static final LegacyComponentSerializer LEGACY = LegacyComponentSerializer.legacySection();
 
     private static final long TICKS_PER_MINUTE = 20L * 60L;
     private static final long TICKS_PER_SECOND = 20L;
@@ -49,9 +60,32 @@ public final class EntityCleanupScheduler {
     private static final int STATS_SUMMARY_LIMIT = 4;
     private static final String EMPTY_SUMMARY_PLACEHOLDER = "None";
 
+    // Cached server API methods resolved once on first use (null = not available on this build).
+    private static @Nullable Method serverTpsMethod;
+    private static @Nullable Method serverMsptMethod;
+    private static boolean serverMethodsResolved = false;
+
+    private static void resolveServerMethods() {
+        if (serverMethodsResolved) {
+            return;
+        }
+        try {
+            serverTpsMethod = Bukkit.getServer().getClass().getMethod("getTPS");
+        } catch (NoSuchMethodException ignored) {
+            serverTpsMethod = null;
+        }
+        try {
+            serverMsptMethod = Bukkit.getServer().getClass().getMethod("getAverageTickTime");
+        } catch (NoSuchMethodException ignored) {
+            serverMsptMethod = null;
+        }
+        serverMethodsResolved = true;
+    }
+
     private final JavaPlugin plugin;
     private List<CleanupSettings> cleanupSettings;
     private final @Nullable WorldGuardCleanupBypass worldGuardBypass;
+    private final @Nullable EzCountdownIntegration ezCountdownIntegration;
     private final CleanupStatsTracker statsTracker;
     private final RemovalEvaluator removalEvaluator;
     private final BroadcastService broadcastService = new BroadcastService();
@@ -61,11 +95,13 @@ public final class EntityCleanupScheduler {
     private final Map<String, PreCleanSummary> cachedPreCleanSummaries = new HashMap<>();
 
     public EntityCleanupScheduler(JavaPlugin plugin, List<CleanupSettings> settings,
-            @Nullable WorldGuardCleanupBypass worldGuardBypass, CleanupStatsTracker statsTracker) {
+            @Nullable WorldGuardCleanupBypass worldGuardBypass, CleanupStatsTracker statsTracker,
+            @Nullable EzCountdownIntegration ezCountdownIntegration) {
         this.plugin = plugin;
         this.cleanupSettings = new ArrayList<>(settings);
         this.worldGuardBypass = worldGuardBypass;
         this.statsTracker = statsTracker;
+        this.ezCountdownIntegration = ezCountdownIntegration;
         this.removalEvaluator = new RemovalEvaluator(worldGuardBypass);
     }
 
@@ -192,16 +228,15 @@ public final class EntityCleanupScheduler {
         }
 
         if (settings.isStartBroadcastEnabled()) {
-            Component message = MINI_MESSAGE.deserialize(settings.getStartMessageTemplate(),
+            broadcastSimpleTemplate(settings.getStartMessageTemplate(),
                     Placeholder.parsed("cleaner", settings.getCleanerId()));
-            String legacyMessage = net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer.legacySection().serialize(message);
-            for (Player player : Bukkit.getOnlinePlayers()) {
-                player.sendMessage(legacyMessage);
-            }
-            Bukkit.getServer().getConsoleSender().sendMessage(legacyMessage);
         }
 
         EntityPileDetector pileDetector = EntityPileDetector.create(settings.getPileDetectionSettings());
+        ChunkCapTracker chunkCapTracker = settings.isChunkCapEnabled()
+                ? new ChunkCapTracker(settings.getChunkCapSettings()) : null;
+        EntityMerger entityMerger = settings.isMergingEnabled()
+                ? new EntityMerger(settings.getMergeSettings()) : null;
 
         // Only build summary tracker when the pre-clean template is configured — avoids allocating
         // tracking state (and the recordEntity() call overhead) when the feature is unused.
@@ -230,8 +265,16 @@ public final class EntityCleanupScheduler {
                     if (worldMin > 0 && world.getPlayers().size() < worldMin) {
                         continue;
                     }
+                    if (entityMerger != null) {
+                        Map<String, Integer> mergeCounts = entityMerger.merge(world);
+                        mergeCounts.forEach((k, v) -> groupCounts.merge(k, v, Integer::sum));
+                        int worldMerged = mergeCounts.values().stream().mapToInt(Integer::intValue).sum();
+                        if (worldMerged > 0) {
+                            worldCounts.merge(world.getName(), worldMerged, Integer::sum);
+                        }
+                    }
                     for (Entity entity : world.getEntities()) {
-                        String removalGroup = removalEvaluator.evaluateRemovalGroup(entity, settings, world.getName(), pileDetector);
+                        String removalGroup = removalEvaluator.evaluateRemovalGroup(entity, settings, world.getName(), pileDetector, chunkCapTracker);
                         if (removalGroup != null) {
                             toRemove.add(entity);
                             groupCounts.merge(removalGroup, 1, Integer::sum);
@@ -256,6 +299,7 @@ public final class EntityCleanupScheduler {
                     if (preSummary != null) {
                         cachedPreCleanSummaries.put(settings.getCleanerId(), preSummary);
                     }
+                    maybeStartSparkProfiler(settings, toRemove.size());
                     if (toRemove.size() > settings.getAsyncRemovalBatchSize()) {
                         scheduleEntityRemovalBatches(toRemove, settings, startNanos, tpsBefore, groupCounts, worldCounts);
                     } else {
@@ -285,8 +329,16 @@ public final class EntityCleanupScheduler {
             if (worldMin > 0 && world.getPlayers().size() < worldMin) {
                 continue;
             }
+            if (entityMerger != null) {
+                Map<String, Integer> mergeCounts = entityMerger.merge(world);
+                mergeCounts.forEach((k, v) -> groupCounts.merge(k, v, Integer::sum));
+                int worldMerged = mergeCounts.values().stream().mapToInt(Integer::intValue).sum();
+                if (worldMerged > 0) {
+                    worldCounts.merge(world.getName(), worldMerged, Integer::sum);
+                }
+            }
             for (Entity entity : world.getEntities()) {
-                String removalGroup = removalEvaluator.evaluateRemovalGroup(entity, settings, world.getName(), pileDetector);
+                String removalGroup = removalEvaluator.evaluateRemovalGroup(entity, settings, world.getName(), pileDetector, chunkCapTracker);
                 if (removalGroup != null) {
                     toRemove.add(entity);
                     groupCounts.merge(removalGroup, 1, Integer::sum);
@@ -312,6 +364,7 @@ public final class EntityCleanupScheduler {
             // registers the task (cheap). The actual entity.remove() executes on each entity's owning
             // region thread so all removals run concurrently without blocking the global region thread.
             int total = toRemove.size();
+            maybeStartSparkProfiler(settings, total);
             for (Entity entity : toRemove) {
                 if (entity.isValid()) {
                     FoliaScheduler.removeEntity(entity, plugin);
@@ -323,6 +376,7 @@ public final class EntityCleanupScheduler {
         }
 
         // Synchronous removal on main/global thread (all platforms with async-removal: false).
+        maybeStartSparkProfiler(settings, toRemove.size());
         for (Entity entity : toRemove) {
             entity.remove();
         }
@@ -367,21 +421,23 @@ public final class EntityCleanupScheduler {
         maybeBroadcastStatsSummary(settings);
 
         if (settings.isSummaryBroadcastEnabled()) {
-            Component message = MINI_MESSAGE.deserialize(settings.getSummaryMessageTemplate(),
+            broadcastSimpleTemplate(settings.getSummaryMessageTemplate(),
                     Placeholder.parsed("count", Integer.toString(removed)),
                     Placeholder.parsed("minutes", Long.toString(settings.getCleanupIntervalMinutes())),
                     Placeholder.parsed("cleaner", settings.getCleanerId()));
-            String legacyMessage = net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer.legacySection().serialize(message);
-            for (Player player : Bukkit.getOnlinePlayers()) {
-                player.sendMessage(legacyMessage);
-            }
-            Bukkit.getServer().getConsoleSender().sendMessage(legacyMessage);
         }
 
         // Post-cleanup commands — run as console after every cleanup finishes.
         // finishCleanup is always invoked on the main/global thread, so dispatchCommand is safe.
         for (String cmd : settings.getPostCleanupCommands()) {
             Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd);
+        }
+
+        // Discord webhook notification — fire and forget on a background thread.
+        DiscordWebhookService webhookService = Registry.getDiscordWebhookService();
+        if (webhookService != null) {
+            webhookService.sendCleanupSummary(
+                    settings.getCleanerId(), removed, groupCounts, durationMillis, tpsBefore, tpsAfter);
         }
     }
 
@@ -409,7 +465,7 @@ public final class EntityCleanupScheduler {
         String lastDuration = lastRun == null ? "N/A" : formatDurationMillis(lastRun.durationMillis());
         String lastTpsImpact = lastRun == null ? "N/A" : formatTpsImpact(lastRun.tpsImpact());
 
-        Component message = MINI_MESSAGE.deserialize(settings.getStatsSummaryMessageTemplate(),
+        broadcastSimpleTemplate(settings.getStatsSummaryMessageTemplate(),
                 Placeholder.parsed("cleaner", settings.getCleanerId()),
                 Placeholder.parsed("runs", Long.toString(snapshot.totals().runs())),
                 Placeholder.parsed("total_removed", Long.toString(snapshot.totals().removed())),
@@ -420,13 +476,6 @@ public final class EntityCleanupScheduler {
                 Placeholder.parsed("last_removed", lastRemoved),
                 Placeholder.parsed("last_duration", lastDuration),
                 Placeholder.parsed("last_tps_impact", lastTpsImpact));
-
-        String legacyMessage = net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer.legacySection()
-                .serialize(message);
-        for (Player player : Bukkit.getOnlinePlayers()) {
-            player.sendMessage(legacyMessage);
-        }
-        Bukkit.getServer().getConsoleSender().sendMessage(legacyMessage);
     }
 
     // Backwards-compatibility helper used by existing unit tests which reflectively
@@ -437,9 +486,8 @@ public final class EntityCleanupScheduler {
     }
 
     private void sendWarningBroadcast(CleanupSettings settings, long minutesRemaining) {
-        Component message = MINI_MESSAGE.deserialize(settings.getWarningMessageTemplate(),
+        broadcastCountdownTemplate(settings, settings.getWarningMessageTemplate(),
                 createBroadcastPlaceholders(settings, minutesRemaining, minutesRemaining * 60L));
-        broadcastCountdownMessage(settings, message);
     }
 
     private void sendPreCleanBroadcast(CleanupSettings settings, long minutesRemaining) {
@@ -452,21 +500,17 @@ public final class EntityCleanupScheduler {
         Collections.addAll(placeholders, createBroadcastPlaceholders(settings, minutesRemaining, minutesRemaining * 60L));
         placeholders.add(Placeholder.parsed("top_worlds", summary.topWorlds()));
         placeholders.add(Placeholder.parsed("top_chunks", summary.topChunks()));
-        Component message = MINI_MESSAGE.deserialize(template, placeholders.toArray(TagResolver[]::new));
-        broadcastCountdownMessage(settings, message);
+        broadcastCountdownTemplate(settings, template, placeholders.toArray(TagResolver[]::new));
     }
 
     private void sendIntervalBroadcast(CleanupSettings settings, long minutesRemaining) {
-        Component message = MINI_MESSAGE.deserialize(settings.getIntervalBroadcastMessageTemplate(),
+        broadcastCountdownTemplate(settings, settings.getIntervalBroadcastMessageTemplate(),
                 createBroadcastPlaceholders(settings, minutesRemaining, minutesRemaining * 60L));
-        broadcastCountdownMessage(settings, message);
     }
 
     private void sendDynamicBroadcast(CleanupSettings settings, long totalSecondsRemaining) {
-        long minutesRemaining = totalSecondsRemaining / 60L;
-        Component message = MINI_MESSAGE.deserialize(settings.getDynamicBroadcastMessageTemplate(),
-                createBroadcastPlaceholders(settings, minutesRemaining, totalSecondsRemaining));
-        broadcastCountdownMessage(settings, message);
+        broadcastCountdownTemplate(settings, settings.getDynamicBroadcastMessageTemplate(),
+                createBroadcastPlaceholders(settings, totalSecondsRemaining / 60L, totalSecondsRemaining));
     }
 
     private void handleCountdownBroadcasts(CleanupSettings settings, long totalSecondsRemaining) {
@@ -514,6 +558,50 @@ public final class EntityCleanupScheduler {
             placeholders.add(Placeholder.parsed("cost", cancelSettings.getFormattedCost()));
         }
         return placeholders.toArray(TagResolver[]::new);
+    }
+
+    /**
+     * Broadcasts a MiniMessage template to all online players and the console.
+     * When PlaceholderAPI is available, placeholders in the template are resolved
+     * per player before MiniMessage deserialisation.
+     */
+    private void broadcastSimpleTemplate(String template, TagResolver... resolvers) {
+        if (PapiHook.isEnabled()) {
+            Bukkit.getConsoleSender().sendMessage(
+                    LEGACY.serialize(MINI_MESSAGE.deserialize(PapiHook.setPlaceholders(template), resolvers)));
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                player.sendMessage(LEGACY.serialize(
+                        MINI_MESSAGE.deserialize(PapiHook.setPlaceholders(player, template), resolvers)));
+            }
+        } else {
+            String legacy = LEGACY.serialize(MINI_MESSAGE.deserialize(template, resolvers));
+            Bukkit.getOnlinePlayers().forEach(p -> p.sendMessage(legacy));
+            Bukkit.getConsoleSender().sendMessage(legacy);
+        }
+    }
+
+    /**
+     * Broadcasts a countdown MiniMessage template to all online players and the console.
+     * Players with {@code ezclean.cancel} permission receive an interactive click-to-cancel
+     * message when the cleaner's cancel mechanic is enabled.
+     * When PlaceholderAPI is available, placeholders are resolved per player.
+     */
+    private void broadcastCountdownTemplate(CleanupSettings settings, String template, TagResolver[] resolvers) {
+        if (PapiHook.isEnabled()) {
+            CleanupCancelSettings cancel = settings.getCancelSettings();
+            Bukkit.getConsoleSender().sendMessage(
+                    LEGACY.serialize(MINI_MESSAGE.deserialize(PapiHook.setPlaceholders(template), resolvers)));
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                Component msg = MINI_MESSAGE.deserialize(PapiHook.setPlaceholders(player, template), resolvers);
+                if (cancel.isEnabled() && player.hasPermission(CANCEL_PERMISSION)) {
+                    player.sendMessage(LEGACY.serialize(applyCancelInteraction(settings, msg)));
+                } else {
+                    player.sendMessage(LEGACY.serialize(msg));
+                }
+            }
+        } else {
+            broadcastCountdownMessage(settings, MINI_MESSAGE.deserialize(template, resolvers));
+        }
     }
 
     private void broadcastCountdownMessage(CleanupSettings settings, Component baseMessage) {
@@ -647,8 +735,17 @@ public final class EntityCleanupScheduler {
     }
 
     private static @Nullable Double captureTpsSample() {
+        // Prefer Spark's higher-quality rolling average when the plugin is present.
+        Double sparkTps = SparkHook.getTps();
+        if (sparkTps != null) {
+            return sparkTps;
+        }
+        resolveServerMethods();
+        if (serverTpsMethod == null) {
+            return null;
+        }
         try {
-            Object result = Bukkit.getServer().getClass().getMethod("getTPS").invoke(Bukkit.getServer());
+            Object result = serverTpsMethod.invoke(Bukkit.getServer());
             if (result instanceof double[] values && values.length > 0) {
                 return values[0];
             }
@@ -656,6 +753,44 @@ public final class EntityCleanupScheduler {
             return null;
         }
         return null;
+    }
+
+    private static @Nullable Double captureMsptSample() {
+        // Prefer Spark's higher-quality rolling average when the plugin is present.
+        Double sparkMspt = SparkHook.getMspt();
+        if (sparkMspt != null) {
+            return sparkMspt;
+        }
+        resolveServerMethods();
+        if (serverMsptMethod == null) {
+            return null;
+        }
+        try {
+            Object result = serverMsptMethod.invoke(Bukkit.getServer());
+            if (result instanceof Double d) {
+                return d;
+            }
+            if (result instanceof Float f) {
+                return (double) f;
+            }
+        } catch (ReflectiveOperationException ignored) {
+            return null;
+        }
+        return null;
+    }
+
+    /**
+     * Starts a Spark profiler session when the cleanup is removing an exceptionally
+     * large number of entities and the Spark auto-profile feature is configured.
+     * Must be called from the main/global thread.
+     */
+    private void maybeStartSparkProfiler(CleanupSettings settings, int entityCount) {
+        com.skyblockexp.ezclean.config.SparkSettings sparkSettings = settings.getSparkSettings();
+        if (sparkSettings.isAutoProfileEnabled()
+                && SparkHook.isEnabled()
+                && entityCount >= sparkSettings.getAutoProfileThreshold()) {
+            SparkHook.triggerAutoProfiler(plugin, sparkSettings.getAutoProfileDurationSeconds());
+        }
     }
 
     private @Nullable ScheduledCleanup findScheduled(String cleanerId) {
@@ -677,8 +812,25 @@ public final class EntityCleanupScheduler {
         private final String normalizedCleanerId;
         private long secondsUntilCleanup;
         private final Map<String, Long> worldSecondsCounters = new HashMap<>();
+        /**
+         * Per-world deferral counter: how many consecutive seconds each world timer has
+         * been held back due to server load.  Keyed by lower-cased world name, matching
+         * {@link #worldSecondsCounters}.
+         */
+        private final Map<String, Long> worldDeferredSeconds = new HashMap<>();
         private Runnable cancelCountdownTask;
         private long lastTickMillis;
+        /**
+         * How many consecutive seconds the <em>global</em> cleanup has been deferred.
+         * Only accumulated while {@code secondsUntilCleanup == 0}; reset to zero as
+         * soon as the countdown is running or cleanup fires.
+         */
+        private long deferredSeconds = 0L;
+        /**
+         * {@code true} while the global cleanup is being held at second 0 pending server
+         * recovery.  Used to suppress repeated countdown broadcasts at the same instant.
+         */
+        private boolean cleanupHeld = false;
 
         private ScheduledCleanup(CleanupSettings settings) {
             this.settings = settings;
@@ -689,53 +841,95 @@ public final class EntityCleanupScheduler {
             secondsUntilCleanup = Math.max(1L, settings.getCleanupIntervalMinutes()) * 60L;
             for (Map.Entry<String, Long> e : settings.getWorldIntervalOverrides().entrySet()) {
                 worldSecondsCounters.put(e.getKey(), e.getValue() * 60L);
+                worldDeferredSeconds.put(e.getKey(), 0L);
             }
             lastTickMillis = System.currentTimeMillis();
             cancelCountdownTask = FoliaScheduler.runGlobalTimer(
                     plugin, this::tick, TICKS_PER_SECOND, TICKS_PER_SECOND);
+            syncEzCountdown(secondsUntilCleanup);
         }
 
         private void tick() {
             long now = System.currentTimeMillis();
-            secondsUntilCleanup--;
-            if (secondsUntilCleanup < 0L) {
-                secondsUntilCleanup = 0L;
-            }
 
-            // Per-world interval timers — fire independently of the global countdown.
+            // Sample TPS/MSPT once per tick so both global and per-world checks share
+            // the same snapshot without redundant reflection calls.
+            Double tps = captureTpsSample();
+            Double mspt = captureMsptSample();
+
+            // Per-world interval timers — each tracks its own deferred-seconds counter
+            // so worlds don't consume each other's force-through budget.
             for (Map.Entry<String, Long> entry : worldSecondsCounters.entrySet()) {
+                String worldKey = entry.getKey();
                 long remaining = entry.getValue() - 1L;
                 if (remaining <= 0L) {
-                    worldSecondsCounters.put(entry.getKey(),
-                            settings.getWorldIntervalOverrides().get(entry.getKey()) * 60L);
-                    performCleanup(settings, Collections.singleton(entry.getKey()));
+                    long worldDeferred = worldDeferredSeconds.getOrDefault(worldKey, 0L);
+                    if (shouldDefer(tps, mspt, worldDeferred)) {
+                        // Hold the world timer at 0; increment its own deferred counter.
+                        worldDeferredSeconds.put(worldKey, worldDeferred + 1L);
+                    } else {
+                        // Reset deferred counter and fire — reset first so an exception
+                        // inside performCleanup doesn't leave the timer stuck at 0.
+                        worldDeferredSeconds.put(worldKey, 0L);
+                        worldSecondsCounters.put(worldKey,
+                                settings.getWorldIntervalOverrides().get(worldKey) * 60L);
+                        performCleanup(settings, Collections.singleton(worldKey));
+                    }
                 } else {
                     entry.setValue(remaining);
+                    // Not at hold point — clear any lingering deferred state.
+                    worldDeferredSeconds.put(worldKey, 0L);
                 }
             }
 
-            handleCountdownBroadcasts(settings, secondsUntilCleanup);
+            // Global countdown.
+            if (secondsUntilCleanup > 0L) {
+                secondsUntilCleanup--;
+                // Not in hold mode: clear the deferred counter so it starts fresh when
+                // the cleanup actually becomes due.
+                deferredSeconds = 0L;
+                cleanupHeld = false;
+            }
+
+            // Broadcast only while the timer is counting down or on the very first tick
+            // it reaches 0.  Skip on subsequent ticks while held at 0 to prevent the same
+            // timestamp from broadcasting again every second (and to avoid dynamic-seconds
+            // broadcasts at second 0 firing continuously while deferred).
+            if (!cleanupHeld) {
+                handleCountdownBroadcasts(settings, secondsUntilCleanup);
+            }
+
             if (secondsUntilCleanup <= 0L) {
-                // Build the set of worlds the global timer should clean — exclude worlds
-                // that have their own per-world interval overrides.
-                Set<String> overridden = settings.getWorldIntervalOverrides().keySet();
-                Set<String> restrict = null;
-                if (!overridden.isEmpty()) {
-                    restrict = new HashSet<>();
-                    for (World w : Bukkit.getWorlds()) {
-                        String n = w.getName().toLowerCase(Locale.ROOT);
-                        if (settings.isWorldEnabled(w.getName()) && !overridden.contains(n)) {
-                            restrict.add(n);
+                if (shouldDefer(tps, mspt, deferredSeconds)) {
+                    deferredSeconds++;
+                    cleanupHeld = true;
+                    // Cleanup held: secondsUntilCleanup stays at 0; re-evaluated next second.
+                } else {
+                    deferredSeconds = 0L;
+                    cleanupHeld = false;
+                    // Build the set of worlds the global timer should clean — exclude worlds
+                    // that have their own per-world interval overrides.
+                    Set<String> overridden = settings.getWorldIntervalOverrides().keySet();
+                    Set<String> restrict = null;
+                    if (!overridden.isEmpty()) {
+                        restrict = new HashSet<>();
+                        for (World w : Bukkit.getWorlds()) {
+                            String n = w.getName().toLowerCase(Locale.ROOT);
+                            if (settings.isWorldEnabled(w.getName()) && !overridden.contains(n)) {
+                                restrict.add(n);
+                            }
                         }
                     }
+                    performCleanup(settings, restrict);
+                    secondsUntilCleanup = Math.max(1L, settings.getCleanupIntervalMinutes()) * 60L;
+                    syncEzCountdown(secondsUntilCleanup);
                 }
-                performCleanup(settings, restrict);
-                secondsUntilCleanup = Math.max(1L, settings.getCleanupIntervalMinutes()) * 60L;
             }
             lastTickMillis = now;
         }
 
         private void cancel() {
+            stopEzCountdown();
             if (cancelCountdownTask != null) {
                 cancelCountdownTask.run();
                 cancelCountdownTask = null;
@@ -747,17 +941,24 @@ public final class EntityCleanupScheduler {
         }
 
         private void triggerNow() {
+            deferredSeconds = 0L;
+            cleanupHeld = false;
             performCleanup(settings, null);
             secondsUntilCleanup = Math.max(1L, settings.getCleanupIntervalMinutes()) * 60L;
             lastTickMillis = System.currentTimeMillis();
+            syncEzCountdown(secondsUntilCleanup);
         }
 
         private Duration cancelNextRun() {
+            deferredSeconds = 0L;
+            cleanupHeld = false;
             secondsUntilCleanup = Math.max(1L, settings.getCleanupIntervalMinutes()) * 60L;
             for (Map.Entry<String, Long> e : settings.getWorldIntervalOverrides().entrySet()) {
                 worldSecondsCounters.put(e.getKey(), e.getValue() * 60L);
+                worldDeferredSeconds.put(e.getKey(), 0L);
             }
             lastTickMillis = System.currentTimeMillis();
+            syncEzCountdown(secondsUntilCleanup);
             return Duration.ofSeconds(secondsUntilCleanup);
         }
 
@@ -773,6 +974,53 @@ public final class EntityCleanupScheduler {
 
         private CleanupSettings getSettings() {
             return settings;
+        }
+
+        /**
+         * Starts or restarts the EzCountdown countdown for this cleaner with the given duration.
+         * No-op when the EzCountdown integration is absent or disabled for this profile.
+         */
+        private void syncEzCountdown(long durationSeconds) {
+            if (ezCountdownIntegration == null) {
+                return;
+            }
+            ezCountdownIntegration.syncCountdown(settings.getCleanerId(),
+                    settings.getEzCountdownSettings(), durationSeconds);
+        }
+
+        /**
+         * Stops the EzCountdown countdown for this cleaner.
+         * No-op when the EzCountdown integration is absent or disabled for this profile.
+         */
+        private void stopEzCountdown() {
+            if (ezCountdownIntegration == null) {
+                return;
+            }
+            ezCountdownIntegration.stopCountdown(settings.getCleanerId(),
+                    settings.getEzCountdownSettings());
+        }
+
+        /**
+         * Returns {@code true} when the cleanup due for this tick should be postponed
+         * because server performance is below configured thresholds and the maximum
+         * deferral window for this particular cleanup has not yet been exhausted.
+         *
+         * @param tps          1-minute TPS average sampled for this tick, or {@code null}
+         * @param mspt         average MSPT sampled for this tick, or {@code null}
+         * @param deferredSecs consecutive seconds this specific cleanup has already been deferred
+         */
+        private boolean shouldDefer(@Nullable Double tps, @Nullable Double mspt, long deferredSecs) {
+            TpsAwareSettings cfg = settings.getTpsAwareSettings();
+            if (!cfg.isEnabled()) {
+                return false;
+            }
+            // Force through once the per-cleanup deferral budget is exhausted.
+            if (cfg.getMaxDeferSeconds() > 0 && deferredSecs >= cfg.getMaxDeferSeconds()) {
+                return false;
+            }
+            boolean tpsLow = tps != null && tps < cfg.getMinTps();
+            boolean msptHigh = mspt != null && mspt > cfg.getMaxMspt();
+            return tpsLow || msptHigh;
         }
     }
 

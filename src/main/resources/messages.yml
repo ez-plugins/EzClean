@@ -27,12 +27,12 @@ defaults:
       message: ""
     interval:
       # Available tags: {minutes}, {cleaner}
-      message: "<yellow>⚠ Cleanup in <gold>{minutes}</gold> minutes. Clear valuables!</yellow>"
+      message: "<yellow>⚠ Cleanup in <gold>{minutes}</gold> minutes. Clear valuables!</yellow> <dark_gray>(<click:suggest_command:'/ezclean cancel {cleaner}'><hover:show_text:'<gray>Suggest cancel command</gray>'>cancel</hover></click>)</dark_gray>"
     dynamic:
       # Available tags: {minutes}, {seconds}, {cleaner}
       # When using the {seconds} tag, messages can be configured for per-second reminders
       # (e.g. seconds: [5,4,3,2,1] in the cleaner profile).
-      message: "<gold>⏳ {cleaner} cleanup in <yellow>{minutes}</yellow> minute(s)!</gold>"
+      message: "<gold>⏳ {cleaner} cleanup in <yellow>{minutes}</yellow> minute(s)!</gold> <dark_gray>(<click:suggest_command:'/ezclean cancel {cleaner}'><hover:show_text:'<gray>Suggest cancel command</gray>'>cancel</hover></click>)</dark_gray>"
   stats-summary:
     # Available tags: {cleaner}, {runs}, {total_removed}, {avg_duration}, {avg_tps_impact},
     # {top_groups}, {top_worlds}, {last_removed}, {last_duration}, {last_tps_impact}

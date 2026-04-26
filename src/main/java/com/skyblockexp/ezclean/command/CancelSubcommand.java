@@ -12,7 +12,6 @@ import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
 import net.milkbowl.vault.economy.Economy;
 import net.milkbowl.vault.economy.EconomyResponse;
 import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import java.time.Duration;
@@ -35,13 +34,13 @@ public class CancelSubcommand implements Subcommand {
     @Override
     public boolean execute(CommandSender sender, String label, String[] args) {
         if (!(sender instanceof Player player)) {
-            sender.sendMessage(ChatColor.RED + "Only players may cancel cleanup cycles.");
+            sender.sendMessage(Msg.error(Msg.t("command.cancel.players-only")));
             return true;
         }
 
         List<String> cleanerIds = cleanupScheduler.getCleanerIds();
         if (cleanerIds.isEmpty()) {
-            sender.sendMessage(ChatColor.RED + "No cleanup profiles are currently configured.");
+            sender.sendMessage(Msg.error(Msg.t("command.no-profiles")));
             return true;
         }
 
@@ -53,17 +52,21 @@ public class CancelSubcommand implements Subcommand {
         String cleanerId = resolveCleanerId(args, cleanerIds);
         if (cleanerId == null) {
             if (args.length == 0 && cleanerIds.size() > 1) {
-                sender.sendMessage(ChatColor.RED + "Multiple cleanup profiles available. Specify one of: "
-                        + String.join(", ", cleanerIds));
+                sender.sendMessage(Msg.PREFIX
+                        .append(net.kyori.adventure.text.Component.text(Msg.t("command.cancel.multiple"), net.kyori.adventure.text.format.NamedTextColor.RED))
+                        .append(net.kyori.adventure.text.Component.text(String.join(", ", cleanerIds), net.kyori.adventure.text.format.NamedTextColor.AQUA)));
             } else if (args.length > 0) {
-                sender.sendMessage(ChatColor.RED + "No cleanup profile matches \"" + args[0] + "\".");
+                sender.sendMessage(Msg.PREFIX
+                        .append(net.kyori.adventure.text.Component.text(Msg.t("command.cancel.no-match", "id", args[0]), net.kyori.adventure.text.format.NamedTextColor.RED))
+                        .append(net.kyori.adventure.text.Component.text(Msg.t("command.cancel.available-label"), net.kyori.adventure.text.format.NamedTextColor.GRAY))
+                        .append(net.kyori.adventure.text.Component.text(String.join(", ", cleanerIds), net.kyori.adventure.text.format.NamedTextColor.AQUA)));
             }
             return true;
         }
 
         CleanupSettings settings = cleanupScheduler.getSettings(cleanerId);
         if (settings == null) {
-            sender.sendMessage(ChatColor.RED + "No cleanup profile matches \"" + cleanerId + "\".");
+            sender.sendMessage(Msg.error(Msg.t("command.cancel.no-match-simple", "id", cleanerId)));
             return true;
         }
 
@@ -76,7 +79,7 @@ public class CancelSubcommand implements Subcommand {
 
         Duration remaining = cleanupScheduler.getTimeUntilCleanup(cleanerId);
         if (remaining == null) {
-            sender.sendMessage(ChatColor.RED + "That cleanup profile is not currently scheduled.");
+            sender.sendMessage(Msg.error(Msg.t("command.cancel.idle", "id", cleanerId)));
             return true;
         }
 
@@ -99,7 +102,7 @@ public class CancelSubcommand implements Subcommand {
             EconomyResponse withdrawal = economy.withdrawPlayer(player, cost);
             if (withdrawal == null || withdrawal.type != EconomyResponse.ResponseType.SUCCESS) {
                 String error = withdrawal != null ? withdrawal.errorMessage : "Economy error.";
-                sender.sendMessage(ChatColor.RED + "Unable to withdraw funds: " + error);
+                sender.sendMessage(Msg.error(Msg.t("command.cancel.funding-error", "error", error)));
                 return true;
             }
         }
@@ -109,7 +112,7 @@ public class CancelSubcommand implements Subcommand {
             if (cost > 0.0D) {
                 economy.depositPlayer(player, cost);
             }
-            sender.sendMessage(ChatColor.RED + "Failed to cancel the upcoming cleanup.");
+            sender.sendMessage(Msg.error(Msg.t("command.cancel.cancel-failed")));
             return true;
         }
 
@@ -177,6 +180,6 @@ public class CancelSubcommand implements Subcommand {
     }
 
     private void sendUsage(CommandSender sender, String label) {
-        sender.sendMessage(ChatColor.RED + "Usage: /" + label + " cancel [cleaner_id]");
+        sender.sendMessage(Msg.error("Usage: /" + label + " cancel [cleaner_id]"));
     }
 }

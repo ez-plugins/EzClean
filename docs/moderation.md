@@ -1,6 +1,6 @@
 ---
 title: Moderation guide
-nav_order: 7
+nav_order: 8
 description: Admin workflows for managing EzClean on a live server.
 ---
 

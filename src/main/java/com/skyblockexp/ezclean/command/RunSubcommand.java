@@ -1,7 +1,8 @@
 package com.skyblockexp.ezclean.command;
 
 import com.skyblockexp.ezclean.scheduler.EntityCleanupScheduler;
-import org.bukkit.ChatColor;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.command.CommandSender;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -21,7 +22,7 @@ public class RunSubcommand implements Subcommand {
     public boolean execute(CommandSender sender, String label, String[] args) {
         List<String> cleanerIds = cleanupScheduler.getCleanerIds();
         if (cleanerIds.isEmpty()) {
-            sender.sendMessage(ChatColor.RED + "No cleanup profiles are currently configured.");
+            sender.sendMessage(Msg.error(Msg.t("command.no-profiles")));
             return true;
         }
 
@@ -35,8 +36,7 @@ public class RunSubcommand implements Subcommand {
             if (cleanerIds.size() == 1) {
                 cleanerId = cleanerIds.get(0);
             } else {
-                sender.sendMessage(ChatColor.RED + "Multiple cleanup profiles available. Specify one of: "
-                        + String.join(", ", cleanerIds));
+                sender.sendMessage(Msg.error(Msg.t("command.run.multiple", "ids", String.join(", ", cleanerIds))));
                 return true;
             }
         } else {
@@ -48,17 +48,20 @@ public class RunSubcommand implements Subcommand {
                 }
             }
             if (cleanerId == null) {
-                sender.sendMessage(ChatColor.RED + "No cleanup profile matches \"" + requestedId + "\".");
+                sender.sendMessage(Msg.PREFIX
+                        .append(Component.text(Msg.t("command.run.no-match", "id", requestedId), NamedTextColor.RED))
+                        .append(Component.text(Msg.t("command.run.available"), NamedTextColor.GRAY))
+                        .append(Component.text(String.join(", ", cleanerIds), NamedTextColor.AQUA)));
                 return true;
             }
         }
 
         if (!cleanupScheduler.triggerCleanup(cleanerId)) {
-            sender.sendMessage(ChatColor.RED + "That cleanup profile is not currently scheduled.");
+            sender.sendMessage(Msg.error(Msg.t("command.run.idle", "id", cleanerId)));
             return true;
         }
 
-        sender.sendMessage(ChatColor.GREEN + "Triggered cleanup for profile \"" + cleanerId + "\".");
+        sender.sendMessage(Msg.success(Msg.t("command.run.triggered", "id", cleanerId)));
         return true;
     }
 
@@ -84,6 +87,6 @@ public class RunSubcommand implements Subcommand {
     }
 
     private void sendUsage(CommandSender sender, String label) {
-        sender.sendMessage(ChatColor.RED + "Usage: /" + label + " run [cleaner_id]");
+        sender.sendMessage(Msg.error("Usage: /" + label + " run [cleaner_id]"));
     }
 }

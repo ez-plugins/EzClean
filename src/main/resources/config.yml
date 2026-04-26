@@ -1,6 +1,44 @@
 # EzClean global configuration.
 # Most settings live in death-chests.yml and cleaners/*.yml.
 
+# Language for command feedback and broadcast defaults. Bundled: en, nl, es.
+# Place a custom override at plugins/EzClean/lang/<code>.yml to further customise strings.
+language: en
+
 update-check:
   # Set to false to disable the SpigotMC update checker entirely.
   enabled: true
+
+storage:
+  # Storage backend for cleanup statistics.
+  # Supported: sqlite, mysql
+  type: sqlite
+
+  # SQLite settings (used when type is sqlite).
+  sqlite:
+    # Path to the database file, relative to the EzClean plugin data folder.
+    file: ezclean-stats.db
+
+  # MySQL / MariaDB settings (used when type is mysql).
+  mysql:
+    host: localhost
+    port: 3306
+    database: ezclean
+    username: root
+    password: ""
+
+# Discord webhook integration — post a cleanup summary embed after every cleanup cycle.
+# The webhook URL must point to a Discord server webhook; other URLs are rejected for security.
+discord:
+  # Set to true to enable Discord notifications.
+  enabled: false
+  # The Discord webhook URL to post to.
+  # Create one at: Server Settings → Integrations → Webhooks → New Webhook → Copy Webhook URL
+  webhook-url: ""
+  # Controls which events trigger a notification.
+  events:
+    # Send a summary embed after each cleanup cycle completes.
+    cleanup-summary: true
+  # Left-side stripe colour of the embed as a hex colour code (without the '#').
+  # Default: Discord blurple (5865F2).
+  embed-color: "5865F2"

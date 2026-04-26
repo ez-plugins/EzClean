@@ -1,6 +1,6 @@
 ---
 title: Developer guide
-nav_order: 8
+nav_order: 9
 description: Build, test, and contribute to EzClean.
 ---
 

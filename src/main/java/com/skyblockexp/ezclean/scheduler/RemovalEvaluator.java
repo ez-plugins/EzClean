@@ -8,6 +8,7 @@ import com.skyblockexp.ezclean.config.ItemMetadataFilter;
 import com.skyblockexp.ezclean.config.SpawnReasonFilter;
 import com.skyblockexp.ezclean.integration.WorldGuardCleanupBypass;
 import com.skyblockexp.ezclean.config.CleanupSettings;
+import com.skyblockexp.ezclean.util.ChunkCapTracker;
 import com.skyblockexp.ezclean.util.EntityPileDetector;
 
 import org.bukkit.entity.AbstractVillager;
@@ -29,6 +30,7 @@ import org.bukkit.entity.Vehicle;
 import org.bukkit.entity.WaterMob;
 import org.bukkit.entity.Enemy;
 import org.bukkit.event.entity.CreatureSpawnEvent;
+import org.bukkit.Location;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -52,6 +54,12 @@ public final class RemovalEvaluator {
 
     public @Nullable String evaluateRemovalGroup(Entity entity, CleanupSettings settings,
             String worldName, @Nullable EntityPileDetector pileDetector) {
+        return evaluateRemovalGroup(entity, settings, worldName, pileDetector, null);
+    }
+
+    public @Nullable String evaluateRemovalGroup(Entity entity, CleanupSettings settings,
+            String worldName, @Nullable EntityPileDetector pileDetector,
+            @Nullable ChunkCapTracker chunkCapTracker) {
         if (worldGuardBypass != null && worldGuardBypass.shouldBypass(entity)) {
             return null;
         }
@@ -131,6 +139,16 @@ public final class RemovalEvaluator {
             return "vehicles";
         }
         if (entity instanceof Item itemEntity && settings.removeDroppedItems()) {
+            // Age gate: only remove items that have existed for at least N ticks.
+            int minAge = settings.getDroppedItemsMinAgeTicks();
+            if (minAge > 0 && entity.getTicksLived() < minAge) {
+                return null;
+            }
+            // Proximity gate: protect items that are near a player.
+            int proximityBlocks = settings.getItemPlayerProximityBlocks();
+            if (proximityBlocks > 0 && isNearPlayer(entity, proximityBlocks)) {
+                return null;
+            }
             ItemMetadataFilter metaFilter = settings.getItemMetadataFilter();
             if (metaFilter.isEnabled() && metaFilter.isProtected(itemEntity.getItemStack())) {
                 return null;
@@ -138,6 +156,16 @@ public final class RemovalEvaluator {
             return "dropped-items";
         }
         if (entity instanceof org.bukkit.entity.ExperienceOrb && settings.removeExperienceOrbs()) {
+            // Age gate: only remove orbs that have existed for at least N ticks.
+            int minAge = settings.getExperienceOrbsMinAgeTicks();
+            if (minAge > 0 && entity.getTicksLived() < minAge) {
+                return null;
+            }
+            // Proximity gate: protect orbs that are near a player.
+            int proximityBlocks = settings.getOrbPlayerProximityBlocks();
+            if (proximityBlocks > 0 && isNearPlayer(entity, proximityBlocks)) {
+                return null;
+            }
             return "experience-orbs";
         }
         if (entity instanceof Projectile && settings.removeProjectiles()) {
@@ -155,7 +183,34 @@ public final class RemovalEvaluator {
         if (pileDetector != null && pileDetector.shouldCull(entity)) {
             return "pile-detection";
         }
+        // Chunk-cap check runs last so all protection rules above are respected for
+        // entities that survive normal evaluation — the cap only trims the overflow.
+        if (chunkCapTracker != null && chunkCapTracker.shouldCap(entity)) {
+            return "chunk-cap";
+        }
         return null;
+    }
+
+    /**
+     * Returns {@code true} if the entity is within {@code radiusBlocks} blocks of any
+     * player that is currently online in the same world.
+     *
+     * @param entity       the entity to test
+     * @param radiusBlocks inclusive radius in blocks
+     */
+    private static boolean isNearPlayer(Entity entity, int radiusBlocks) {
+        List<Player> players = entity.getWorld().getPlayers();
+        if (players.isEmpty()) {
+            return false;
+        }
+        Location entityLoc = entity.getLocation();
+        double radiusSq = (double) radiusBlocks * radiusBlocks;
+        for (Player player : players) {
+            if (player.getLocation().distanceSquared(entityLoc) <= radiusSq) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public static boolean isVehicleEntity(Entity entity) {
