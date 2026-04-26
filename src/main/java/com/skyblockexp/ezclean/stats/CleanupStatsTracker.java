@@ -1,231 +1,230 @@
 package com.skyblockexp.ezclean.stats;
 
-import java.io.File;
-import java.io.IOException;
 import java.time.Instant;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.Optional;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import org.bukkit.configuration.ConfigurationSection;
-import org.bukkit.configuration.file.YamlConfiguration;
-import org.bukkit.plugin.java.JavaPlugin;
+import com.github.ezframework.jaloquent.exception.StorageException;
+import com.github.ezframework.jaloquent.model.Model;
+import com.skyblockexp.ezclean.storage.StorageService;
+import com.skyblockexp.ezclean.storage.model.CleanerTotalsModel;
+import com.skyblockexp.ezclean.storage.model.CountModel;
+import com.skyblockexp.ezclean.storage.model.CountModel.CountType;
+import com.skyblockexp.ezclean.storage.model.LastRunModel;
 import com.skyblockexp.ezclean.util.FoliaScheduler;
+import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.Nullable;
 
 /**
  * Persists and aggregates cleanup run statistics for EzClean.
+ *
+ * <p>All writes are performed asynchronously via {@link FoliaScheduler#runAsync}.
+ * Reads may be called from any thread; SQLite/MySQL reads are fast enough for
+ * the command-response and scheduler paths that invoke {@link #getSnapshot}.
  */
 public final class CleanupStatsTracker {
 
-    private static final String ROOT_SECTION = "cleaners";
-
-    private final File statsFile;
-    private final Logger logger;
     private final JavaPlugin plugin;
-    private final Object lock = new Object();
-    private final AtomicBoolean pendingSave = new AtomicBoolean(false);
-    private YamlConfiguration configuration;
+    private final Logger logger;
+    private final StorageService storage;
+    /** Serialises concurrent writes for the same cleaner's aggregated row. */
+    private final Object writeLock = new Object();
 
-    public CleanupStatsTracker(JavaPlugin plugin) {
+    public CleanupStatsTracker(JavaPlugin plugin, StorageService storage) {
         Objects.requireNonNull(plugin, "plugin");
+        Objects.requireNonNull(storage, "storage");
         this.plugin = plugin;
-        this.statsFile = new File(plugin.getDataFolder(), "cleanup-stats.yml");
         this.logger = plugin.getLogger();
-        this.configuration = loadConfiguration();
+        this.storage = storage;
     }
 
+    /**
+     * No-op: Jaloquent commits writes immediately; nothing to flush on shutdown.
+     */
     public void shutdown() {
-        synchronized (lock) {
-            saveConfiguration();
-        }
+        // Jaloquent writes are committed per-operation; no flush required.
     }
 
+    /**
+     * Records the result of a single cleanup run for the given cleaner.
+     *
+     * <p>The database update is dispatched asynchronously so as not to block
+     * the server thread.
+     */
     public void recordRun(String cleanerId, CleanupRunStats runStats) {
         Objects.requireNonNull(cleanerId, "cleanerId");
         Objects.requireNonNull(runStats, "runStats");
-        synchronized (lock) {
-            ConfigurationSection cleanerSection = getCleanerSection(cleanerId);
-            ConfigurationSection totalsSection = getOrCreateSection(cleanerSection, "totals");
-            long runs = totalsSection.getLong("runs", 0L) + 1L;
-            totalsSection.set("runs", runs);
-
-            long removedTotal = totalsSection.getLong("removed", 0L) + runStats.removed();
-            totalsSection.set("removed", removedTotal);
-
-            long durationTotal = totalsSection.getLong("duration-ms", 0L) + runStats.durationMillis();
-            totalsSection.set("duration-ms", durationTotal);
-
-            if (runStats.tpsImpact() != null) {
-                double impactTotal = totalsSection.getDouble("tps-impact-total", 0.0) + runStats.tpsImpact();
-                long samples = totalsSection.getLong("tps-samples", 0L) + 1L;
-                totalsSection.set("tps-impact-total", impactTotal);
-                totalsSection.set("tps-samples", samples);
-            }
-
-            incrementCounts(getOrCreateSection(totalsSection, "groups"), runStats.groupCounts());
-            incrementCounts(getOrCreateSection(totalsSection, "worlds"), runStats.worldCounts());
-
-            ConfigurationSection lastRunSection = getOrCreateSection(cleanerSection, "last-run");
-            lastRunSection.set("timestamp", runStats.timestampMillis());
-            lastRunSection.set("removed", runStats.removed());
-            lastRunSection.set("duration-ms", runStats.durationMillis());
-            if (runStats.tpsBefore() != null) {
-                lastRunSection.set("tps-before", runStats.tpsBefore());
-            } else {
-                lastRunSection.set("tps-before", null);
-            }
-            if (runStats.tpsAfter() != null) {
-                lastRunSection.set("tps-after", runStats.tpsAfter());
-            } else {
-                lastRunSection.set("tps-after", null);
-            }
-            if (runStats.tpsImpact() != null) {
-                lastRunSection.set("tps-impact", runStats.tpsImpact());
-            } else {
-                lastRunSection.set("tps-impact", null);
-            }
-
-            replaceCounts(lastRunSection, "groups", runStats.groupCounts());
-            replaceCounts(lastRunSection, "worlds", runStats.worldCounts());
-        }
-        scheduleAsyncSave();
-    }
-
-    private void scheduleAsyncSave() {
-        if (pendingSave.compareAndSet(false, true)) {
-            FoliaScheduler.runAsync(plugin, () -> {
-                synchronized (lock) {
-                    saveConfiguration();
+        FoliaScheduler.runAsync(plugin, () -> {
+            synchronized (writeLock) {
+                try {
+                    persistRun(cleanerId, runStats);
+                } catch (StorageException ex) {
+                    logger.log(Level.WARNING, "Failed to persist cleanup run stats for '" + cleanerId + "'.", ex);
                 }
-                pendingSave.set(false);
-            });
-        }
+            }
+        });
     }
 
+    /**
+     * Returns a snapshot of accumulated statistics for the given cleaner,
+     * or {@code null} if no runs have been recorded yet.
+     */
     public @Nullable CleanupStatsSnapshot getSnapshot(String cleanerId) {
         Objects.requireNonNull(cleanerId, "cleanerId");
-        synchronized (lock) {
-            ConfigurationSection cleanerSection = configuration.getConfigurationSection(ROOT_SECTION + "." + cleanerId);
-            if (cleanerSection == null) {
-                return null;
-            }
-
-            ConfigurationSection totalsSection = cleanerSection.getConfigurationSection("totals");
-            CleanupStatsSnapshot.Totals totals = totalsSection == null
-                    ? CleanupStatsSnapshot.Totals.empty()
-                    : new CleanupStatsSnapshot.Totals(
-                            totalsSection.getLong("runs", 0L),
-                            totalsSection.getLong("removed", 0L),
-                            totalsSection.getLong("duration-ms", 0L),
-                            totalsSection.getDouble("tps-impact-total", 0.0),
-                            totalsSection.getLong("tps-samples", 0L),
-                            readCounts(totalsSection.getConfigurationSection("groups")),
-                            readCounts(totalsSection.getConfigurationSection("worlds"))
-                    );
-
-            ConfigurationSection lastRunSection = cleanerSection.getConfigurationSection("last-run");
-            CleanupStatsSnapshot.LastRun lastRun = null;
-            if (lastRunSection != null && lastRunSection.getLong("timestamp", 0L) > 0L) {
-                Double tpsBefore = lastRunSection.contains("tps-before")
-                        ? lastRunSection.getDouble("tps-before")
-                        : null;
-                Double tpsAfter = lastRunSection.contains("tps-after")
-                        ? lastRunSection.getDouble("tps-after")
-                        : null;
-                Double tpsImpact = lastRunSection.contains("tps-impact")
-                        ? lastRunSection.getDouble("tps-impact")
-                        : null;
-                lastRun = new CleanupStatsSnapshot.LastRun(
-                        lastRunSection.getLong("timestamp", 0L),
-                        lastRunSection.getLong("removed", 0L),
-                        lastRunSection.getLong("duration-ms", 0L),
-                        tpsBefore,
-                        tpsAfter,
-                        tpsImpact,
-                        readCounts(lastRunSection.getConfigurationSection("groups")),
-                        readCounts(lastRunSection.getConfigurationSection("worlds"))
-                );
-            }
-
-            return new CleanupStatsSnapshot(cleanerId, totals, lastRun);
+        try {
+            return loadSnapshot(cleanerId);
+        } catch (StorageException ex) {
+            logger.log(Level.WARNING, "Failed to read cleanup stats for '" + cleanerId + "'.", ex);
+            return null;
         }
     }
 
+    /**
+     * Returns snapshots for every cleaner that has recorded at least one run.
+     */
     public Map<String, CleanupStatsSnapshot> getAllSnapshots() {
-        synchronized (lock) {
-            ConfigurationSection root = configuration.getConfigurationSection(ROOT_SECTION);
-            if (root == null) {
-                return Collections.emptyMap();
-            }
+        try {
+            List<CleanerTotalsModel> allTotals = storage.getTotalsRepo().query(Model.queryBuilder().build());
             Map<String, CleanupStatsSnapshot> snapshots = new LinkedHashMap<>();
-            for (String cleanerId : root.getKeys(false)) {
-                CleanupStatsSnapshot snapshot = getSnapshot(cleanerId);
+            for (CleanerTotalsModel totalsModel : allTotals) {
+                String cid = totalsModel.getId();
+                CleanupStatsSnapshot snapshot = loadSnapshot(cid);
                 if (snapshot != null) {
-                    snapshots.put(cleanerId, snapshot);
+                    snapshots.put(cid, snapshot);
                 }
             }
             return Collections.unmodifiableMap(snapshots);
-        }
-    }
-
-    private YamlConfiguration loadConfiguration() {
-        if (!statsFile.exists()) {
-            return new YamlConfiguration();
-        }
-        return YamlConfiguration.loadConfiguration(statsFile);
-    }
-
-    private void saveConfiguration() {
-        try {
-            configuration.save(statsFile);
-        } catch (IOException ex) {
-            logger.log(Level.WARNING, "Failed to save EzClean cleanup-stats.yml.", ex);
-        }
-    }
-
-    private ConfigurationSection getCleanerSection(String cleanerId) {
-        ConfigurationSection root = getOrCreateSection(configuration, ROOT_SECTION);
-        return getOrCreateSection(root, cleanerId);
-    }
-
-    private static ConfigurationSection getOrCreateSection(ConfigurationSection parent, String path) {
-        ConfigurationSection section = parent.getConfigurationSection(path);
-        if (section != null) {
-            return section;
-        }
-        return parent.createSection(path);
-    }
-
-    private static void incrementCounts(ConfigurationSection section, Map<String, Integer> values) {
-        for (Map.Entry<String, Integer> entry : values.entrySet()) {
-            String key = entry.getKey();
-            long current = section.getLong(key, 0L);
-            section.set(key, current + entry.getValue());
-        }
-    }
-
-    private static void replaceCounts(ConfigurationSection parent, String childName, Map<String, Integer> values) {
-        parent.set(childName, null);
-        ConfigurationSection section = parent.createSection(childName);
-        for (Map.Entry<String, Integer> entry : values.entrySet()) {
-            section.set(entry.getKey(), entry.getValue());
-        }
-    }
-
-    private static Map<String, Long> readCounts(@Nullable ConfigurationSection section) {
-        if (section == null) {
+        } catch (StorageException ex) {
+            logger.log(Level.WARNING, "Failed to read all cleanup stats snapshots.", ex);
             return Collections.emptyMap();
         }
-        Map<String, Long> counts = new LinkedHashMap<>();
-        for (String key : section.getKeys(false)) {
-            counts.put(key, section.getLong(key, 0L));
-        }
-        return Collections.unmodifiableMap(counts);
     }
+
+    // -----------------------------------------------------------------------------------------
+    // Private persistence helpers
+    // -----------------------------------------------------------------------------------------
+
+    void persistRun(String cleanerId, CleanupRunStats runStats) throws StorageException {
+        // --- 1. Upsert cumulative totals row ---
+        Optional<CleanerTotalsModel> existing = storage.getTotalsRepo().find(cleanerId);
+        CleanerTotalsModel totals = existing.orElseGet(() -> new CleanerTotalsModel(cleanerId));
+
+        totals.setRuns(totals.getRuns() + 1L);
+        totals.setRemoved(totals.getRemoved() + runStats.removed());
+        totals.setDurationMs(totals.getDurationMs() + runStats.durationMillis());
+        if (runStats.tpsImpact() != null) {
+            totals.setTpsImpactTotal(totals.getTpsImpactTotal() + runStats.tpsImpact());
+            totals.setTpsSamples(totals.getTpsSamples() + 1L);
+        }
+        storage.saveModel("ezclean_stats_totals", totals);
+
+        // --- 2. Increment total group / world count rows ---
+        incrementCounts(cleanerId, CountType.TOTAL_GROUP, runStats.groupCounts());
+        incrementCounts(cleanerId, CountType.TOTAL_WORLD, runStats.worldCounts());
+
+        // --- 3. Upsert last-run row ---
+        LastRunModel lastRun = new LastRunModel(cleanerId);
+        lastRun.setTimestampMs(runStats.timestampMillis());
+        lastRun.setRemoved(runStats.removed());
+        lastRun.setDurationMs(runStats.durationMillis());
+        lastRun.setTpsBefore(runStats.tpsBefore());
+        lastRun.setTpsAfter(runStats.tpsAfter());
+        lastRun.setTpsImpact(runStats.tpsImpact());
+        storage.saveModel("ezclean_last_run", lastRun);
+
+        // --- 4. Replace last-run group / world count rows ---
+        replaceLastRunCounts(cleanerId, CountType.LAST_RUN_GROUP, runStats.groupCounts());
+        replaceLastRunCounts(cleanerId, CountType.LAST_RUN_WORLD, runStats.worldCounts());
+    }
+
+    private void incrementCounts(String cleanerId, CountType type, Map<String, Integer> deltas)
+            throws StorageException {
+        for (Map.Entry<String, Integer> entry : deltas.entrySet()) {
+            String rowId = CountModel.buildId(cleanerId, type, entry.getKey());
+            Optional<CountModel> found = storage.getCountsRepo().find(rowId);
+            CountModel row = found.orElseGet(() ->
+                    CountModel.create(cleanerId, type, entry.getKey(), 0L));
+            row.setCount(row.getCount() + entry.getValue());
+            storage.saveModel("ezclean_counts", row);
+        }
+    }
+
+    private void replaceLastRunCounts(String cleanerId, CountType type, Map<String, Integer> fresh)
+            throws StorageException {
+        // Delete stale rows for this cleaner + type, then write fresh values.
+        var deleteQuery = Model.queryBuilder()
+                .whereEquals("cleaner_id", cleanerId)
+                .whereEquals("count_type", type.name())
+                .build();
+        storage.getCountsRepo().deleteWhere(deleteQuery);
+
+        for (Map.Entry<String, Integer> entry : fresh.entrySet()) {
+            CountModel row = CountModel.create(cleanerId, type, entry.getKey(), entry.getValue());
+            storage.saveModel("ezclean_counts", row);
+        }
+    }
+
+    private @Nullable CleanupStatsSnapshot loadSnapshot(String cleanerId) throws StorageException {
+        Optional<CleanerTotalsModel> totalsOpt = storage.getTotalsRepo().find(cleanerId);
+        if (totalsOpt.isEmpty()) {
+            return null;
+        }
+        CleanerTotalsModel totalsModel = totalsOpt.get();
+
+        Map<String, Long> groupTotals = loadCounts(cleanerId, CountType.TOTAL_GROUP);
+        Map<String, Long> worldTotals = loadCounts(cleanerId, CountType.TOTAL_WORLD);
+
+        CleanupStatsSnapshot.Totals totals = new CleanupStatsSnapshot.Totals(
+                totalsModel.getRuns(),
+                totalsModel.getRemoved(),
+                totalsModel.getDurationMs(),
+                totalsModel.getTpsImpactTotal(),
+                totalsModel.getTpsSamples(),
+                groupTotals,
+                worldTotals);
+
+        Optional<LastRunModel> lastRunOpt = storage.getLastRunRepo().find(cleanerId);
+        CleanupStatsSnapshot.LastRun lastRun = null;
+        if (lastRunOpt.isPresent()) {
+            LastRunModel lr = lastRunOpt.get();
+            Map<String, Long> lastRunGroups = loadCounts(cleanerId, CountType.LAST_RUN_GROUP);
+            Map<String, Long> lastRunWorlds = loadCounts(cleanerId, CountType.LAST_RUN_WORLD);
+            lastRun = new CleanupStatsSnapshot.LastRun(
+                    lr.getTimestampMs(),
+                    lr.getRemoved(),
+                    lr.getDurationMs(),
+                    lr.getTpsBefore(),
+                    lr.getTpsAfter(),
+                    lr.getTpsImpact(),
+                    lastRunGroups,
+                    lastRunWorlds);
+        }
+
+        return new CleanupStatsSnapshot(cleanerId, totals, lastRun);
+    }
+
+    private Map<String, Long> loadCounts(String cleanerId, CountType type) throws StorageException {
+        var query = Model.queryBuilder()
+                .whereEquals("cleaner_id", cleanerId)
+                .whereEquals("count_type", type.name())
+                .build();
+        List<CountModel> rows = storage.getCountsRepo().query(query);
+        Map<String, Long> result = new HashMap<>();
+        for (CountModel row : rows) {
+            result.put(row.getKeyName(), row.getCount());
+        }
+        return Collections.unmodifiableMap(result);
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Nested record types (public API — unchanged)
+    // -----------------------------------------------------------------------------------------
 
     public record CleanupRunStats(long timestampMillis, long removed, long durationMillis,
             @Nullable Double tpsBefore, @Nullable Double tpsAfter, @Nullable Double tpsImpact,
