@@ -4,12 +4,11 @@ import com.skyblockexp.ezclean.EzCleanPlugin;
 import com.skyblockexp.ezclean.Registry;
 import com.skyblockexp.ezclean.stats.CleanupStatsTracker;
 import com.skyblockexp.ezclean.scheduler.EntityCleanupScheduler;
-import org.bukkit.ChatColor;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.command.CommandSender;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -27,7 +26,7 @@ public class StatsSubcommand implements Subcommand {
     public boolean execute(CommandSender sender, String label, String[] args) {
         List<String> cleanerIds = cleanupScheduler.getCleanerIds();
         if (cleanerIds.isEmpty()) {
-            sender.sendMessage(ChatColor.RED + "No cleanup profiles are currently configured.");
+            sender.sendMessage(Msg.error(Msg.t("command.no-profiles")));
             return true;
         }
 
@@ -39,23 +38,22 @@ public class StatsSubcommand implements Subcommand {
         String cleanerId = resolveCleanerId(args, cleanerIds);
         if (cleanerId == null) {
             if (args.length == 0 && cleanerIds.size() > 1) {
-                sender.sendMessage(ChatColor.RED + "Multiple cleanup profiles available. Specify one of: "
-                        + String.join(", ", cleanerIds));
+                sender.sendMessage(Msg.PREFIX
+                        .append(Component.text(Msg.t("command.stats.multiple"), NamedTextColor.RED))
+                        .append(Component.text(String.join(", ", cleanerIds), NamedTextColor.AQUA)));
             } else if (args.length > 0) {
-                sender.sendMessage(ChatColor.RED + "No cleanup profile matches \"" + args[0] + "\".");
+                sender.sendMessage(Msg.error(Msg.t("command.stats.no-match", "id", args[0])));
             }
             return true;
         }
 
         CleanupStatsTracker.CleanupStatsSnapshot snapshot = Registry.getStatsTracker().getSnapshot(cleanerId);
         if (snapshot == null || snapshot.totals().runs() == 0L) {
-            sender.sendMessage(ChatColor.GRAY + "No cleanup stats recorded yet for \"" + cleanerId + "\".");
+            sender.sendMessage(Msg.warn(Msg.t("command.stats.no-stats", "id", cleanerId)));
             return true;
         }
 
-        for (String line : formatStatsSnapshot(snapshot)) {
-            sender.sendMessage(line);
-        }
+        sendSnapshot(sender, snapshot);
         return true;
     }
 
@@ -96,77 +94,52 @@ public class StatsSubcommand implements Subcommand {
         return null;
     }
 
-    private List<String> formatStatsSnapshot(CleanupStatsTracker.CleanupStatsSnapshot snapshot) {
-        List<String> lines = new ArrayList<>();
+    private void sendSnapshot(CommandSender sender, CleanupStatsTracker.CleanupStatsSnapshot snapshot) {
         CleanupStatsTracker.CleanupStatsSnapshot.Totals totals = snapshot.totals();
         CleanupStatsTracker.CleanupStatsSnapshot.LastRun lastRun = snapshot.lastRun();
 
-        lines.add(ChatColor.GOLD + "" + ChatColor.BOLD + "Cleanup stats for " + snapshot.cleanerId());
-        lines.add(ChatColor.GRAY + "Total runs: " + ChatColor.AQUA + totals.runs());
-        lines.add(ChatColor.GRAY + "Total removed: " + ChatColor.AQUA + totals.removed());
-        lines.add(ChatColor.GRAY + "Average duration: " + ChatColor.AQUA + formatDuration(totals.averageDurationMillis()));
-        lines.add(ChatColor.GRAY + "Average TPS impact: " + ChatColor.AQUA + formatTpsImpact(totals.averageTpsImpact()));
-        lines.add(ChatColor.GRAY + "Top entity groups: " + ChatColor.AQUA
-                + formatTopEntries(totals.groupTotals(), 5));
-        lines.add(ChatColor.GRAY + "Top worlds: " + ChatColor.AQUA
-                + formatTopEntries(totals.worldTotals(), 5));
+        sender.sendMessage(Msg.PREFIX
+                .append(Component.text(Msg.t("command.stats.header"), NamedTextColor.GRAY))
+                .append(Component.text(snapshot.cleanerId(), NamedTextColor.AQUA, TextDecoration.BOLD)));
+
+        sender.sendMessage(statRow(Msg.t("command.stats.row-total-runs"),    String.valueOf(totals.runs())));
+        sender.sendMessage(statRow(Msg.t("command.stats.row-total-removed"), String.valueOf(totals.removed())));
+        sender.sendMessage(statRow(Msg.t("command.stats.row-avg-duration"),  Msg.formatMs(totals.averageDurationMillis())));
+        sender.sendMessage(statRow(Msg.t("command.stats.row-avg-tps"),       Msg.formatTpsImpact(totals.averageTpsImpact())));
+
+        sender.sendMessage(Component.text(Msg.t("command.stats.top-groups"), NamedTextColor.GRAY));
+        for (Component c : Msg.formatTopEntriesAsComponents(totals.groupTotals(), 5, null)) {
+            sender.sendMessage(c);
+        }
+        sender.sendMessage(Component.text(Msg.t("command.stats.top-worlds"), NamedTextColor.GRAY));
+        for (Component c : Msg.formatTopEntriesAsComponents(totals.worldTotals(), 5, null)) {
+            sender.sendMessage(c);
+        }
 
         if (lastRun != null) {
-            lines.add(ChatColor.DARK_GRAY + "Last run:");
-            lines.add(ChatColor.GRAY + " - Removed: " + ChatColor.AQUA + lastRun.removed());
-            lines.add(ChatColor.GRAY + " - Duration: " + ChatColor.AQUA + formatDuration(lastRun.durationMillis()));
-            lines.add(ChatColor.GRAY + " - TPS impact: " + ChatColor.AQUA + formatTpsImpact(lastRun.tpsImpact()));
-            lines.add(ChatColor.GRAY + " - Groups: " + ChatColor.AQUA
-                    + formatTopEntries(lastRun.groupCounts(), 5));
-            lines.add(ChatColor.GRAY + " - Worlds: " + ChatColor.AQUA
-                    + formatTopEntries(lastRun.worldCounts(), 5));
-        }
-
-        return lines;
-    }
-
-    private String formatTopEntries(Map<String, ? extends Number> entries, int limit) {
-        if (entries.isEmpty()) {
-            return "None";
-        }
-        List<Map.Entry<String, ? extends Number>> sorted = new ArrayList<>(entries.entrySet());
-        sorted.sort((left, right) -> {
-            int countCompare = Double.compare(right.getValue().doubleValue(), left.getValue().doubleValue());
-            if (countCompare != 0) {
-                return countCompare;
+            sender.sendMessage(Msg.separator());
+            sender.sendMessage(Component.text("  " + Msg.t("command.stats.last-run"), NamedTextColor.YELLOW, TextDecoration.BOLD));
+            sender.sendMessage(statRow(Msg.t("command.stats.last-removed"),  String.valueOf(lastRun.removed())));
+            sender.sendMessage(statRow(Msg.t("command.stats.last-duration"), Msg.formatMs(lastRun.durationMillis())));
+            sender.sendMessage(statRow(Msg.t("command.stats.last-tps"),      Msg.formatTpsImpact(lastRun.tpsImpact())));
+            sender.sendMessage(Component.text(Msg.t("command.stats.last-groups"), NamedTextColor.GRAY));
+            for (Component c : Msg.formatTopEntriesAsComponents(lastRun.groupCounts(), 5, null)) {
+                sender.sendMessage(c);
             }
-            return left.getKey().compareToIgnoreCase(right.getKey());
-        });
-        StringBuilder builder = new StringBuilder();
-        int max = Math.min(limit, sorted.size());
-        for (int i = 0; i < max; i++) {
-            if (i > 0) {
-                builder.append(", ");
+            sender.sendMessage(Component.text(Msg.t("command.stats.last-worlds"), NamedTextColor.GRAY));
+            for (Component c : Msg.formatTopEntriesAsComponents(lastRun.worldCounts(), 5, null)) {
+                sender.sendMessage(c);
             }
-            Map.Entry<String, ? extends Number> entry = sorted.get(i);
-            builder.append(entry.getKey()).append(" (").append(entry.getValue()).append(")");
         }
-        return builder.toString();
     }
 
-    private String formatDuration(@org.jetbrains.annotations.Nullable Long durationMillis) {
-        if (durationMillis == null) {
-            return "N/A";
-        }
-        if (durationMillis < 1000L) {
-            return durationMillis + "ms";
-        }
-        return String.format(Locale.ROOT, "%.2fs", durationMillis / 1000.0);
-    }
-
-    private String formatTpsImpact(@org.jetbrains.annotations.Nullable Double tpsImpact) {
-        if (tpsImpact == null) {
-            return "N/A";
-        }
-        return String.format(Locale.ROOT, "%.2f", tpsImpact);
+    /** Builds a label → value row with aqua value colour. */
+    private static Component statRow(String label, String value) {
+        return Component.text("  " + label + ": ", NamedTextColor.GRAY)
+                .append(Component.text(value, NamedTextColor.AQUA));
     }
 
     private void sendUsage(CommandSender sender, String label) {
-        sender.sendMessage(ChatColor.RED + "Usage: /" + label + " stats [cleaner_id]");
+        sender.sendMessage(Msg.error("Usage: /" + label + " stats [cleaner_id]"));
     }
 }

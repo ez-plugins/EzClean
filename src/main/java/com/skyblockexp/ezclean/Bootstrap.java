@@ -1,13 +1,24 @@
 package com.skyblockexp.ezclean;
 
 import com.skyblockexp.ezclean.command.EzCleanCommand;
+import com.skyblockexp.ezclean.gui.SetupGUI;
+import com.skyblockexp.ezclean.gui.SetupGUIListener;
+import com.skyblockexp.ezclean.lang.LangProvider;
 import com.skyblockexp.ezclean.update.SpigotUpdateChecker;
+import com.skyblockexp.ezclean.update.UpdateNoticeListener;
 import com.skyblockexp.ezclean.config.CleanupSettings;
+import com.skyblockexp.ezclean.config.DiscordWebhookSettings;
 import com.skyblockexp.ezclean.config.EzCleanConfigurationLoader;
+import com.skyblockexp.ezclean.integration.DiscordWebhookService;
 import com.skyblockexp.ezclean.scheduler.EntityCleanupScheduler;
 import com.skyblockexp.ezclean.manager.DeathChestManager;
 import com.skyblockexp.ezclean.model.DeathChestSettings;
 import com.skyblockexp.ezclean.stats.CleanupStatsTracker;
+import com.skyblockexp.ezclean.storage.StorageService;
+import com.skyblockexp.ezclean.integration.EzCleanExpansion;
+import com.skyblockexp.ezclean.integration.EzCountdownIntegration;
+import com.skyblockexp.ezclean.integration.PapiHook;
+import com.skyblockexp.ezclean.integration.SparkHook;
 import com.skyblockexp.ezclean.integration.WorldGuardCleanupBypass;
 import java.util.List;
 import java.util.logging.Level;
@@ -28,6 +39,7 @@ public final class Bootstrap {
 
     private final EzCleanPlugin plugin;
     private final EzCleanConfigurationLoader configurationLoader;
+    private SetupGUI setupGUI;
 
     public Bootstrap(EzCleanPlugin plugin) {
         this.plugin = plugin;
@@ -62,6 +74,10 @@ public final class Bootstrap {
             // Save default config.yml on first run
             plugin.saveDefaultConfig();
 
+            // Load language provider
+            String langCode = plugin.getConfig().getString("language", "en");
+            Registry.setLang(LangProvider.load(plugin, langCode));
+
             // Setup economy integration
             setupEconomy();
 
@@ -69,13 +85,38 @@ public final class Bootstrap {
             WorldGuardCleanupBypass worldGuardBypass = initializeWorldGuardBypass();
             Registry.setWorldGuardBypass(worldGuardBypass);
 
-            // Load and apply configuration
+            // Initialize EzCountdown integration
+            EzCountdownIntegration ezCountdownIntegration = initializeEzCountdownIntegration();
+            Registry.setEzCountdownIntegration(ezCountdownIntegration);
+
+            // Load and apply configuration (also initialises StorageService + StatsTracker)
             List<CleanupSettings> cleanupSettings = applyConfiguration(configurationLoader.loadConfiguration());
 
             // Initialize metrics and update checker
             new Metrics(plugin, 27736);
             if (plugin.getConfig().getBoolean("update-check.enabled", true)) {
-                new SpigotUpdateChecker(plugin, SPIGOT_RESOURCE_ID).checkForUpdates();
+                SpigotUpdateChecker updateChecker = new SpigotUpdateChecker(plugin, SPIGOT_RESOURCE_ID);
+                updateChecker.checkForUpdates();
+                plugin.getServer().getPluginManager().registerEvents(
+                        new UpdateNoticeListener(updateChecker), plugin);
+            }
+
+            // Register PlaceholderAPI expansion when available
+            if (PapiHook.isEnabled()) {
+                new EzCleanExpansion(plugin).register();
+                plugin.getLogger().info("Hooked into PlaceholderAPI — EzClean placeholders registered.");
+            }
+
+            // Initialise Discord webhook integration
+            initializeDiscordWebhook();
+
+            // Register setup GUI and its listener
+            setupGUI = new SetupGUI(plugin);
+            plugin.getServer().getPluginManager().registerEvents(new SetupGUIListener(setupGUI), plugin);
+
+            // Log Spark integration status
+            if (SparkHook.isEnabled()) {
+                plugin.getLogger().info("Hooked into Spark — using Spark TPS/MSPT data; auto-profiler available.");
             }
 
             // Log initialization summary
@@ -102,6 +143,11 @@ public final class Bootstrap {
             cleanupScheduler.disable();
         }
 
+        EzCountdownIntegration ezCountdownIntegration = Registry.getEzCountdownIntegration();
+        if (ezCountdownIntegration != null) {
+            ezCountdownIntegration.shutdown();
+        }
+
         DeathChestManager deathChestManager = Registry.getDeathChestManager();
         if (deathChestManager != null) {
             deathChestManager.shutdown();
@@ -110,6 +156,11 @@ public final class Bootstrap {
         CleanupStatsTracker statsTracker = Registry.getStatsTracker();
         if (statsTracker != null) {
             statsTracker.shutdown();
+        }
+
+        DiscordWebhookService discordWebhookService = Registry.getDiscordWebhookService();
+        if (discordWebhookService != null) {
+            discordWebhookService.shutdown();
         }
 
         // Clear all registry entries
@@ -122,6 +173,11 @@ public final class Bootstrap {
      * Reloads the plugin configuration.
      */
     public void reloadConfiguration() {
+        plugin.reloadConfig();
+        String langCode = plugin.getConfig().getString("language", "en");
+        Registry.setLang(LangProvider.load(plugin, langCode));
+        // Re-initialise Discord webhook in case the URL or toggle changed.
+        initializeDiscordWebhook();
         List<CleanupSettings> cleanupSettings = applyConfiguration(configurationLoader.loadConfiguration());
         plugin.getLogger().info(() -> String.format("Reloaded EzClean configuration. Loaded %d cleanup profile(s).",
                 cleanupSettings.size()));
@@ -167,13 +223,52 @@ public final class Bootstrap {
         }
     }
 
+    private void initializeDiscordWebhook() {
+        // Shut down any existing service before creating a new one (e.g., on reload).
+        DiscordWebhookService existing = Registry.getDiscordWebhookService();
+        if (existing != null) {
+            existing.shutdown();
+            Registry.setDiscordWebhookService(null);
+        }
+
+        DiscordWebhookSettings webhookSettings = DiscordWebhookSettings.load(plugin.getConfig());
+        if (webhookSettings == null) {
+            return;
+        }
+
+        DiscordWebhookService service = new DiscordWebhookService(webhookSettings, plugin.getLogger());
+        Registry.setDiscordWebhookService(service);
+        plugin.getLogger().info("Discord webhook integration enabled.");
+    }
+
+    private EzCountdownIntegration initializeEzCountdownIntegration() {
+        Plugin ezCountdownPlugin = plugin.getServer().getPluginManager().getPlugin("EzCountdown");
+        if (ezCountdownPlugin == null || !ezCountdownPlugin.isEnabled()) {
+            return null;
+        }
+        try {
+            EzCountdownIntegration integration = EzCountdownIntegration.create(plugin.getLogger());
+            if (integration != null) {
+                plugin.getLogger().info(
+                        "EzCountdown detected; cleanup timers will be mirrored to EzCountdown displays "
+                                + "for profiles that have integrations.ezcountdown.enabled set to true.");
+            }
+            return integration;
+        } catch (Throwable throwable) {
+            plugin.getLogger().log(Level.WARNING,
+                    "Failed to initialize EzCountdown integration; continuing without EzCountdown support.",
+                    throwable);
+            return null;
+        }
+    }
+
     private void registerCommands() {
         EntityCleanupScheduler cleanupScheduler = Registry.getCleanupScheduler();
         if (cleanupScheduler == null) {
             return;
         }
 
-        EzCleanCommand command = new EzCleanCommand(plugin, cleanupScheduler);
+        EzCleanCommand command = new EzCleanCommand(plugin, cleanupScheduler, setupGUI);
         PluginCommand pluginCommand = plugin.getCommand("ezclean");
         if (pluginCommand == null) {
             plugin.getLogger().warning("Failed to register /ezclean command; entry missing from plugin.yml.");
@@ -185,6 +280,18 @@ public final class Bootstrap {
 
     private List<CleanupSettings> applyConfiguration(FileConfiguration newConfiguration) {
         Registry.setConfiguration(newConfiguration);
+
+        // Initialise (or reuse) the storage service on first call.
+        if (Registry.getStorageService() == null) {
+            try {
+                StorageService storageService = StorageService.create(
+                        newConfiguration, plugin.getDataFolder(), plugin.getLogger());
+                Registry.setStorageService(storageService);
+            } catch (com.skyblockexp.ezclean.storage.StorageException ex) {
+                plugin.getLogger().log(Level.SEVERE,
+                        "Failed to initialise EzClean storage — statistics will not be persisted.", ex);
+            }
+        }
 
         List<CleanupSettings> cleanupSettings = CleanupSettings.fromConfiguration(newConfiguration, plugin.getLogger());
         DeathChestSettings deathChestSettings = DeathChestSettings.fromConfiguration(newConfiguration);
@@ -198,13 +305,20 @@ public final class Bootstrap {
         // Initialize or update stats tracker
         CleanupStatsTracker statsTracker = Registry.getStatsTracker();
         if (statsTracker == null) {
-            statsTracker = new CleanupStatsTracker(plugin);
+            StorageService storageService = Registry.getStorageService();
+            if (storageService != null) {
+                statsTracker = new CleanupStatsTracker(plugin, storageService);
+            } else {
+                plugin.getLogger().warning(
+                        "StorageService is unavailable; cleanup statistics will not be recorded.");
+            }
             Registry.setStatsTracker(statsTracker);
         }
 
         // Create and enable new scheduler
         EntityCleanupScheduler cleanupScheduler = new EntityCleanupScheduler(
-                plugin, cleanupSettings, Registry.getWorldGuardBypass(), statsTracker);
+                plugin, cleanupSettings, Registry.getWorldGuardBypass(), statsTracker,
+                Registry.getEzCountdownIntegration());
         cleanupScheduler.enable();
         Registry.setCleanupScheduler(cleanupScheduler);
 

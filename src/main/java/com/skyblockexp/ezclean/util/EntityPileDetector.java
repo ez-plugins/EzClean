@@ -1,6 +1,6 @@
 package com.skyblockexp.ezclean.util;
 
-import com.skyblockexp.ezclean.config.CleanupSettings;
+import com.skyblockexp.ezclean.config.PileDetectionSettings;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -19,23 +19,23 @@ import org.jetbrains.annotations.Nullable;
  */
 public final class EntityPileDetector {
 
-    private final @Nullable CleanupSettings.PileDetectionSettings settings;
+    private final @Nullable PileDetectionSettings settings;
     private final Map<PileKey, Integer> counts = new HashMap<>();
     private final Map<String, Integer> worldCounts = new HashMap<>();
     private final Map<ChunkKey, Integer> chunkCounts = new HashMap<>();
 
-    private EntityPileDetector(@Nullable CleanupSettings.PileDetectionSettings settings) {
+    private EntityPileDetector(@Nullable PileDetectionSettings settings) {
         this.settings = settings;
     }
 
-    public static @Nullable EntityPileDetector create(@Nullable CleanupSettings.PileDetectionSettings settings) {
+    public static @Nullable EntityPileDetector create(@Nullable PileDetectionSettings settings) {
         if (settings == null) {
             return null;
         }
         return new EntityPileDetector(settings);
     }
 
-    public static EntityPileDetector createSummaryTracker(@Nullable CleanupSettings.PileDetectionSettings settings) {
+    public static EntityPileDetector createSummaryTracker(@Nullable PileDetectionSettings settings) {
         return new EntityPileDetector(settings);
     }
 

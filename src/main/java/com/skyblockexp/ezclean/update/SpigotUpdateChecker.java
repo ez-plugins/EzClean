@@ -7,15 +7,32 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import org.bukkit.plugin.java.JavaPlugin;
 import com.skyblockexp.ezclean.util.FoliaScheduler;
+import org.jetbrains.annotations.Nullable;
 
 public final class SpigotUpdateChecker {
     private static final String UPDATE_ENDPOINT = "https://api.spigotmc.org/legacy/update.php?resource=";
     private final JavaPlugin plugin;
     private final int resourceId;
 
+    /** null = not yet checked; empty string = up to date; non-empty = available version. */
+    private volatile @Nullable String availableVersion = null;
+
     public SpigotUpdateChecker(JavaPlugin plugin, int resourceId) {
         this.plugin = plugin;
         this.resourceId = resourceId;
+    }
+
+    /**
+     * Returns the latest version string if an update is available, or {@code null}
+     * if no update is available or the check has not completed yet.
+     */
+    public @Nullable String getAvailableVersion() {
+        return availableVersion;
+    }
+
+    /** Returns the SpigotMC resource URL for building clickable update notices. */
+    public String getResourceUrl() {
+        return "https://www.spigotmc.org/resources/" + resourceId + "/";
     }
 
     public void checkForUpdates() {
@@ -28,10 +45,11 @@ public final class SpigotUpdateChecker {
                 }
                 String currentVersion = plugin.getDescription().getVersion();
                 if (!latestVersion.equalsIgnoreCase(currentVersion)) {
+                    availableVersion = latestVersion;
                     plugin.getLogger().info("A new EzClean version is available: " + latestVersion
-                            + " (current: " + currentVersion + "). Download: https://www.spigotmc.org/resources/"
-                            + resourceId + "/");
+                            + " (current: " + currentVersion + "). Download: " + getResourceUrl());
                 } else {
+                    availableVersion = "";
                     plugin.getLogger().info("EzClean is up to date.");
                 }
             } catch (Exception ex) {
@@ -55,3 +73,4 @@ public final class SpigotUpdateChecker {
         }
     }
 }
+

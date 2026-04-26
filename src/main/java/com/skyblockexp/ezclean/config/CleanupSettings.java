@@ -12,8 +12,8 @@ import java.util.Set;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.regex.PatternSyntaxException;
 
+import com.skyblockexp.ezclean.Registry;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.MemoryConfiguration;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -21,14 +21,25 @@ import org.bukkit.entity.EntityType;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Immutable view of the EzClean configuration options.
+ * Immutable view of the EzClean configuration options for a single cleanup profile.
+ *
+ * <p>Construct instances via {@link #fromConfiguration(FileConfiguration, Logger)} or the
+ * package-private {@link Builder}. All sub-feature groups are accessible both through
+ * dedicated sub-settings objects (e.g. {@link #getBroadcastSettings()}) and through
+ * backward-compatible flat getters for code that predates the split.</p>
  */
 public final class CleanupSettings {
 
+    // -----------------------------------------------------------------------------------------
+    // Constants
+    // -----------------------------------------------------------------------------------------
+
     private static final long TICKS_PER_MINUTE = 20L * 60L;
+
     private static final String DEFAULT_WARNING_MESSAGE =
             "<yellow>⚠ Entity cleanup in <gold>{minutes}</gold> minutes. Clear valuables!</yellow>";
-    private static final String DEFAULT_START_MESSAGE = "<red><bold>✦ Entity cleanup commencing...</bold></red>";
+    private static final String DEFAULT_START_MESSAGE =
+            "<red><bold>✦ Entity cleanup commencing...</bold></red>";
     private static final String DEFAULT_SUMMARY_MESSAGE =
             "<gray>✓ Removed <gold>{count}</gold> entities. Next cleanup in <gold>{minutes}</gold> minutes.</gray>";
     private static final String DEFAULT_INTERVAL_MESSAGE =
@@ -53,52 +64,19 @@ public final class CleanupSettings {
     private static final String DEFAULT_CANCEL_NO_ECONOMY_MESSAGE =
             "<red>Economy is unavailable. Cleanup cannot be canceled.</red>";
 
+    private static final Pattern MINIMESSAGE_PLACEHOLDER_PATTERN =
+            Pattern.compile("\\{([a-zA-Z0-9_-]+)\\}");
+
+    // -----------------------------------------------------------------------------------------
+    // Core fields
+    // -----------------------------------------------------------------------------------------
+
     private final String cleanerId;
     private final long cleanupIntervalTicks;
-    private final long warningOffsetTicks;
-    private final boolean warningEnabled;
-    private final boolean startBroadcastEnabled;
-    private final boolean summaryBroadcastEnabled;
-    private final boolean intervalBroadcastEnabled;
-    private final long intervalBroadcastMinutes;
-    private final String intervalBroadcastMessageTemplate;
-    private final boolean dynamicBroadcastEnabled;
-    private final Set<Long> dynamicBroadcastMinutes;
-    private final Set<Long> dynamicBroadcastSeconds;
-    private final String dynamicBroadcastMessageTemplate;
-    private final boolean statsSummaryBroadcastEnabled;
-    private final long statsSummaryEveryRuns;
-    private final String statsSummaryMessageTemplate;
-    private final String warningMessageTemplate;
-    private final String startMessageTemplate;
-    private final String summaryMessageTemplate;
-    private final @Nullable String preCleanMessageTemplate;
-    private final long warningMinutesBefore;
     private final long cleanupIntervalMinutes;
-    private final boolean removeHostileMobs;
-    private final boolean removePassiveMobs;
-    private final boolean removeVillagers;
-    private final boolean removeVehicles;
-    private final boolean removeDroppedItems;
-    private final boolean removeProjectiles;
-    private final boolean removeExperienceOrbs;
-    private final boolean removeAreaEffectClouds;
-    private final boolean removeFallingBlocks;
-    private final boolean removePrimedTnt;
-    private final boolean protectPlayers;
-    private final boolean protectArmorStands;
-    private final boolean protectDisplayEntities;
-    private final boolean protectTamedMobs;
-    private final boolean protectNameTaggedMobs;
     private final Set<String> enabledWorlds;
     private final Set<EntityType> forcedKeeps;
     private final Set<EntityType> forcedRemovals;
-    /** Regex patterns for the {@code protect.name-tag-patterns} option. Empty = protect all named mobs. */
-    private final List<Pattern> nameTagPatterns;
-    /** Item-metadata protection rules for dropped items. */
-    private final ItemMetadataFilter itemMetadataFilter;
-    private final @Nullable PileDetectionSettings pileDetectionSettings;
-    private final CleanupCancelSettings cancelSettings;
     private final boolean asyncRemoval;
     private final int asyncRemovalBatchSize;
     private final SpawnReasonFilter globalSpawnReasonFilter;
@@ -108,98 +86,237 @@ public final class CleanupSettings {
     private final Map<String, Long> worldIntervalOverrides;
     private final List<String> postCleanupCommands;
 
-    private static final Pattern MINIMESSAGE_PLACEHOLDER_PATTERN = Pattern.compile("\\{([a-zA-Z0-9_-]+)\\}");
+    // -----------------------------------------------------------------------------------------
+    // Sub-settings objects
+    // -----------------------------------------------------------------------------------------
 
-    private CleanupSettings(String cleanerId, long cleanupIntervalTicks, long warningOffsetTicks, boolean warningEnabled,
-            boolean startBroadcastEnabled, boolean summaryBroadcastEnabled, boolean intervalBroadcastEnabled,
-            long intervalBroadcastMinutes, String intervalBroadcastMessageTemplate, boolean dynamicBroadcastEnabled,
-            Set<Long> dynamicBroadcastMinutes, Set<Long> dynamicBroadcastSeconds, String dynamicBroadcastMessageTemplate,
-            boolean statsSummaryBroadcastEnabled, long statsSummaryEveryRuns, String statsSummaryMessageTemplate,
-            String warningMessageTemplate, String startMessageTemplate, String summaryMessageTemplate,
-            @Nullable String preCleanMessageTemplate, long warningMinutesBefore,
-            long cleanupIntervalMinutes, boolean removeHostileMobs, boolean removePassiveMobs,
-            boolean removeVillagers, boolean removeVehicles, boolean removeDroppedItems,
-            boolean removeProjectiles, boolean removeExperienceOrbs, boolean removeAreaEffectClouds,
-            boolean removeFallingBlocks, boolean removePrimedTnt, boolean protectPlayers,
-            boolean protectArmorStands, boolean protectDisplayEntities, boolean protectTamedMobs,
-            boolean protectNameTaggedMobs, Set<String> enabledWorlds,
-            Set<EntityType> forcedKeeps, Set<EntityType> forcedRemovals,
-            List<Pattern> nameTagPatterns, ItemMetadataFilter itemMetadataFilter,
-            @Nullable PileDetectionSettings pileDetectionSettings, CleanupCancelSettings cancelSettings,
-            boolean asyncRemoval, int asyncRemovalBatchSize,
-            SpawnReasonFilter globalSpawnReasonFilter, Map<String, SpawnReasonFilter> worldSpawnReasonFilters,
-            int globalMinPlayers, Map<String, Integer> worldMinPlayers,
-            Map<String, Long> worldIntervalOverrides, List<String> postCleanupCommands) {
-        this.cleanerId = cleanerId;
-        this.cleanupIntervalTicks = cleanupIntervalTicks;
-        this.warningOffsetTicks = warningOffsetTicks;
-        this.warningEnabled = warningEnabled;
-        this.startBroadcastEnabled = startBroadcastEnabled;
-        this.summaryBroadcastEnabled = summaryBroadcastEnabled;
-        this.intervalBroadcastEnabled = intervalBroadcastEnabled;
-        this.intervalBroadcastMinutes = intervalBroadcastMinutes;
-        this.intervalBroadcastMessageTemplate = intervalBroadcastMessageTemplate;
-        this.dynamicBroadcastEnabled = dynamicBroadcastEnabled;
-        this.dynamicBroadcastMinutes = Collections.unmodifiableSet(new LinkedHashSet<>(dynamicBroadcastMinutes));
-        this.dynamicBroadcastSeconds = Collections.unmodifiableSet(new LinkedHashSet<>(dynamicBroadcastSeconds));
-        this.dynamicBroadcastMessageTemplate = dynamicBroadcastMessageTemplate;
-        this.statsSummaryBroadcastEnabled = statsSummaryBroadcastEnabled;
-        this.statsSummaryEveryRuns = statsSummaryEveryRuns;
-        this.statsSummaryMessageTemplate = statsSummaryMessageTemplate;
-        this.warningMessageTemplate = warningMessageTemplate;
-        this.startMessageTemplate = startMessageTemplate;
-        this.summaryMessageTemplate = summaryMessageTemplate;
-        this.preCleanMessageTemplate = preCleanMessageTemplate;
-        this.warningMinutesBefore = warningMinutesBefore;
-        this.cleanupIntervalMinutes = cleanupIntervalMinutes;
-        this.removeHostileMobs = removeHostileMobs;
-        this.removePassiveMobs = removePassiveMobs;
-        this.removeVillagers = removeVillagers;
-        this.removeVehicles = removeVehicles;
-        this.removeDroppedItems = removeDroppedItems;
-        this.removeProjectiles = removeProjectiles;
-        this.removeExperienceOrbs = removeExperienceOrbs;
-        this.removeAreaEffectClouds = removeAreaEffectClouds;
-        this.removeFallingBlocks = removeFallingBlocks;
-        this.removePrimedTnt = removePrimedTnt;
-        this.protectPlayers = protectPlayers;
-        this.protectArmorStands = protectArmorStands;
-        this.protectDisplayEntities = protectDisplayEntities;
-        this.protectTamedMobs = protectTamedMobs;
-        this.protectNameTaggedMobs = protectNameTaggedMobs;
-        this.enabledWorlds = Collections.unmodifiableSet(new HashSet<>(enabledWorlds));
-        this.forcedKeeps = Collections.unmodifiableSet(new HashSet<>(forcedKeeps));
-        this.forcedRemovals = Collections.unmodifiableSet(new HashSet<>(forcedRemovals));
-        this.nameTagPatterns = Collections.unmodifiableList(new ArrayList<>(nameTagPatterns));
-        this.itemMetadataFilter = itemMetadataFilter;
-        this.pileDetectionSettings = pileDetectionSettings;
-        this.cancelSettings = cancelSettings;
-        this.asyncRemoval = asyncRemoval;
-        this.asyncRemovalBatchSize = asyncRemovalBatchSize;
-        this.globalSpawnReasonFilter = globalSpawnReasonFilter;
-        this.worldSpawnReasonFilters = Collections.unmodifiableMap(new HashMap<>(worldSpawnReasonFilters));
-        this.globalMinPlayers = Math.max(0, globalMinPlayers);
-        this.worldMinPlayers = Collections.unmodifiableMap(new HashMap<>(worldMinPlayers));
-        this.worldIntervalOverrides = Collections.unmodifiableMap(new HashMap<>(worldIntervalOverrides));
-        List<String> filteredCmds = new ArrayList<>();
-        for (String cmd : postCleanupCommands) {
+    private final BroadcastSettings broadcastSettings;
+    private final RemovalSettings removalSettings;
+    private final ProtectSettings protectSettings;
+    private final CleanupCancelSettings cancelSettings;
+    private final TpsAwareSettings tpsAwareSettings;
+    private final @Nullable PileDetectionSettings pileDetectionSettings;
+    private final @Nullable ChunkCapSettings chunkCapSettings;
+    private final @Nullable MergeSettings mergeSettings;
+    private final EzCountdownSettings ezCountdownSettings;
+    private final SparkSettings sparkSettings;
+
+    // -----------------------------------------------------------------------------------------
+    // Constructor (private, use Builder)
+    // -----------------------------------------------------------------------------------------
+
+    private CleanupSettings(Builder b) {
+        this.cleanerId = b.cleanerId;
+        this.cleanupIntervalTicks = b.cleanupIntervalTicks;
+        this.cleanupIntervalMinutes = b.cleanupIntervalMinutes;
+        this.enabledWorlds = Collections.unmodifiableSet(new HashSet<>(b.enabledWorlds));
+        this.forcedKeeps = Collections.unmodifiableSet(new HashSet<>(b.forcedKeeps));
+        this.forcedRemovals = Collections.unmodifiableSet(new HashSet<>(b.forcedRemovals));
+        this.asyncRemoval = b.asyncRemoval;
+        this.asyncRemovalBatchSize = b.asyncRemovalBatchSize;
+        this.globalSpawnReasonFilter = b.globalSpawnReasonFilter;
+        this.worldSpawnReasonFilters = Collections.unmodifiableMap(new HashMap<>(b.worldSpawnReasonFilters));
+        this.globalMinPlayers = Math.max(0, b.globalMinPlayers);
+        this.worldMinPlayers = Collections.unmodifiableMap(new HashMap<>(b.worldMinPlayers));
+        this.worldIntervalOverrides = Collections.unmodifiableMap(new HashMap<>(b.worldIntervalOverrides));
+        List<String> cmds = new ArrayList<>();
+        for (String cmd : b.postCleanupCommands) {
             if (cmd != null && !cmd.isBlank()) {
-                filteredCmds.add(cmd);
+                cmds.add(cmd);
             }
         }
-        this.postCleanupCommands = Collections.unmodifiableList(filteredCmds);
+        this.postCleanupCommands = Collections.unmodifiableList(cmds);
+        this.broadcastSettings = b.broadcastSettings;
+        this.removalSettings = b.removalSettings;
+        this.protectSettings = b.protectSettings;
+        this.cancelSettings = b.cancelSettings;
+        this.tpsAwareSettings = b.tpsAwareSettings;
+        this.pileDetectionSettings = b.pileDetectionSettings;
+        this.chunkCapSettings = b.chunkCapSettings;
+        this.mergeSettings = b.mergeSettings;
+        this.ezCountdownSettings = b.ezCountdownSettings;
+        this.sparkSettings = b.sparkSettings;
     }
 
+    // -----------------------------------------------------------------------------------------
+    // Builder
+    // -----------------------------------------------------------------------------------------
+
     /**
-     * Loads cleanup settings from the provided configuration file.
+     * Fluent builder for {@link CleanupSettings}.
      *
-     * @param config the configuration to read from
+     * <p>All sub-settings fields default to disabled / empty instances if not set.</p>
+     */
+    static final class Builder {
+
+        private final String cleanerId;
+        private long cleanupIntervalTicks;
+        private long cleanupIntervalMinutes;
+        private Set<String> enabledWorlds = Collections.singleton("*");
+        private Set<EntityType> forcedKeeps = Collections.emptySet();
+        private Set<EntityType> forcedRemovals = Collections.emptySet();
+        private boolean asyncRemoval;
+        private int asyncRemovalBatchSize = 500;
+        private SpawnReasonFilter globalSpawnReasonFilter = SpawnReasonFilter.empty();
+        private Map<String, SpawnReasonFilter> worldSpawnReasonFilters = Collections.emptyMap();
+        private int globalMinPlayers;
+        private Map<String, Integer> worldMinPlayers = Collections.emptyMap();
+        private Map<String, Long> worldIntervalOverrides = Collections.emptyMap();
+        private List<String> postCleanupCommands = Collections.emptyList();
+        private BroadcastSettings broadcastSettings;
+        private RemovalSettings removalSettings;
+        private ProtectSettings protectSettings;
+        private CleanupCancelSettings cancelSettings = CleanupCancelSettings.disabled();
+        private TpsAwareSettings tpsAwareSettings = TpsAwareSettings.defaults();
+        private @Nullable PileDetectionSettings pileDetectionSettings;
+        private @Nullable ChunkCapSettings chunkCapSettings;
+        private @Nullable MergeSettings mergeSettings;
+        private EzCountdownSettings ezCountdownSettings = EzCountdownSettings.disabled();
+        private SparkSettings sparkSettings = SparkSettings.disabled();
+
+        Builder(String cleanerId) {
+            this.cleanerId = cleanerId;
+        }
+
+        Builder cleanupInterval(long ticks, long minutes) {
+            this.cleanupIntervalTicks = ticks;
+            this.cleanupIntervalMinutes = minutes;
+            return this;
+        }
+
+        Builder broadcastSettings(BroadcastSettings s) {
+            this.broadcastSettings = s;
+            return this;
+        }
+
+        Builder removalSettings(RemovalSettings s) {
+            this.removalSettings = s;
+            return this;
+        }
+
+        Builder protectSettings(ProtectSettings s) {
+            this.protectSettings = s;
+            return this;
+        }
+
+        Builder enabledWorlds(Set<String> s) {
+            this.enabledWorlds = s;
+            return this;
+        }
+
+        Builder forcedKeeps(Set<EntityType> s) {
+            this.forcedKeeps = s;
+            return this;
+        }
+
+        Builder forcedRemovals(Set<EntityType> s) {
+            this.forcedRemovals = s;
+            return this;
+        }
+
+        Builder cancelSettings(CleanupCancelSettings s) {
+            this.cancelSettings = s;
+            return this;
+        }
+
+        Builder asyncRemoval(boolean enabled, int batchSize) {
+            this.asyncRemoval = enabled;
+            this.asyncRemovalBatchSize = batchSize;
+            return this;
+        }
+
+        Builder globalSpawnReasonFilter(SpawnReasonFilter f) {
+            this.globalSpawnReasonFilter = f;
+            return this;
+        }
+
+        Builder worldSpawnReasonFilters(Map<String, SpawnReasonFilter> m) {
+            this.worldSpawnReasonFilters = m;
+            return this;
+        }
+
+        Builder globalMinPlayers(int v) {
+            this.globalMinPlayers = v;
+            return this;
+        }
+
+        Builder worldMinPlayers(Map<String, Integer> m) {
+            this.worldMinPlayers = m;
+            return this;
+        }
+
+        Builder worldIntervalOverrides(Map<String, Long> m) {
+            this.worldIntervalOverrides = m;
+            return this;
+        }
+
+        Builder postCleanupCommands(List<String> l) {
+            this.postCleanupCommands = l;
+            return this;
+        }
+
+        Builder tpsAwareSettings(TpsAwareSettings s) {
+            this.tpsAwareSettings = s;
+            return this;
+        }
+
+        Builder pileDetectionSettings(@Nullable PileDetectionSettings s) {
+            this.pileDetectionSettings = s;
+            return this;
+        }
+
+        Builder chunkCapSettings(@Nullable ChunkCapSettings s) {
+            this.chunkCapSettings = s;
+            return this;
+        }
+
+        Builder mergeSettings(@Nullable MergeSettings s) {
+            this.mergeSettings = s;
+            return this;
+        }
+
+        Builder ezCountdownSettings(EzCountdownSettings s) {
+            this.ezCountdownSettings = s;
+            return this;
+        }
+
+        Builder sparkSettings(SparkSettings s) {
+            this.sparkSettings = s;
+            return this;
+        }
+
+        CleanupSettings build() {
+            if (broadcastSettings == null) {
+                throw new IllegalStateException(
+                        "broadcastSettings must be set before building CleanupSettings for '" + cleanerId + "'");
+            }
+            if (removalSettings == null) {
+                throw new IllegalStateException(
+                        "removalSettings must be set before building CleanupSettings for '" + cleanerId + "'");
+            }
+            if (protectSettings == null) {
+                throw new IllegalStateException(
+                        "protectSettings must be set before building CleanupSettings for '" + cleanerId + "'");
+            }
+            return new CleanupSettings(this);
+        }
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Public factory methods
+    // -----------------------------------------------------------------------------------------
+
+    /**
+     * Loads a list of cleanup profiles from the assembled (multi-file) configuration.
+     *
+     * @param config the combined configuration to read from
      * @param logger the plugin logger used to report invalid entries
-     * @return an immutable settings instance
+     * @return an immutable list of settings instances (at least one)
      */
     public static List<CleanupSettings> fromConfiguration(FileConfiguration config, Logger logger) {
         ConfigurationSection cleanersSection = config.getConfigurationSection("cleaners");
         MessageConfiguration messages = MessageConfiguration.from(config.getConfigurationSection("messages"));
+
         if (cleanersSection == null || cleanersSection.getKeys(false).isEmpty()) {
             return Collections.singletonList(loadLegacySettings(config, logger, messages));
         }
@@ -220,420 +337,64 @@ public final class CleanupSettings {
         return Collections.unmodifiableList(results);
     }
 
-    private static CleanupSettings loadLegacySettings(FileConfiguration config, Logger logger, MessageConfiguration messages) {
-        ConfigurationSection cleanupSection = config.getConfigurationSection("cleanup");
-        if (cleanupSection == null) {
-            cleanupSection = new MemoryConfiguration();
-        }
-        return loadFromSection("default", cleanupSection, logger, messages);
+    // -----------------------------------------------------------------------------------------
+    // Sub-settings accessors
+    // -----------------------------------------------------------------------------------------
+
+    /** All broadcast / warning / reminder settings for this profile. */
+    public BroadcastSettings getBroadcastSettings() {
+        return broadcastSettings;
     }
 
-    private static CleanupSettings loadFromSection(String cleanerId, ConfigurationSection section, Logger logger,
-            MessageConfiguration messages) {
-        long intervalMinutes = Math.max(1L, section.getLong("interval-minutes", 60L));
-        long warningMinutes = Math.max(0L, section.getLong("warning.minutes-before", 5L));
-        boolean warningEnabled = section.getBoolean("warning.enabled", warningMinutes > 0L);
-        boolean startEnabled = section.getBoolean("broadcast.start.enabled", true);
-        boolean summaryEnabled = section.getBoolean("broadcast.summary.enabled", true);
-
-        ConfigurationSection intervalSection = section.getConfigurationSection("broadcast.interval");
-        boolean intervalEnabled = false;
-        long intervalMinutesBetweenBroadcasts = 0L;
-        if (intervalSection != null) {
-            intervalEnabled = intervalSection.getBoolean("enabled", false);
-            intervalMinutesBetweenBroadcasts = Math.max(1L, intervalSection.getLong("every-minutes", 15L));
-            if (intervalMinutesBetweenBroadcasts <= 0L) {
-                intervalEnabled = false;
-            }
-        }
-        String intervalMessage = resolveMessage(cleanerId, section, messages, "broadcast.interval.message",
-                DEFAULT_INTERVAL_MESSAGE);
-
-        ConfigurationSection dynamicSection = section.getConfigurationSection("broadcast.dynamic");
-        boolean dynamicEnabled = false;
-        Set<Long> dynamicMinutes = Collections.emptySet();
-        Set<Long> dynamicSeconds = Collections.emptySet();
-        if (dynamicSection != null) {
-            dynamicEnabled = dynamicSection.getBoolean("enabled", false);
-            List<Integer> configuredMinutes = dynamicSection.getIntegerList("minutes");
-            Set<Long> parsedMinutes = new LinkedHashSet<>();
-            for (Integer value : configuredMinutes) {
-                if (value == null) {
-                    continue;
-                }
-                long minute = value.longValue();
-                if (minute < 0L) {
-                    continue;
-                }
-                parsedMinutes.add(minute);
-            }
-            if (!parsedMinutes.isEmpty()) {
-                dynamicMinutes = Collections.unmodifiableSet(parsedMinutes);
-            } else {
-                dynamicEnabled = false;
-            }
-            List<Integer> configuredSeconds = dynamicSection.getIntegerList("seconds");
-            Set<Long> parsedSeconds = new LinkedHashSet<>();
-            for (Integer value : configuredSeconds) {
-                if (value == null) {
-                    continue;
-                }
-                long second = value.longValue();
-                if (second < 0L) {
-                    continue;
-                }
-                parsedSeconds.add(second);
-            }
-            if (!parsedSeconds.isEmpty()) {
-                dynamicSeconds = Collections.unmodifiableSet(parsedSeconds);
-            }
-        }
-        String dynamicMessage = resolveMessage(cleanerId, section, messages, "broadcast.dynamic.message",
-            DEFAULT_DYNAMIC_MESSAGE);
-
-        ConfigurationSection statsSummarySection = section.getConfigurationSection("broadcast.stats-summary");
-        boolean statsSummaryEnabled = false;
-        long statsSummaryEveryRuns = 0L;
-        if (statsSummarySection != null) {
-            statsSummaryEnabled = statsSummarySection.getBoolean("enabled", false);
-            statsSummaryEveryRuns = Math.max(1L, statsSummarySection.getLong("every-runs", 5L));
-            if (statsSummaryEveryRuns <= 0L) {
-                statsSummaryEnabled = false;
-            }
-        }
-        String statsSummaryMessage = resolveMessage(cleanerId, section, messages, "stats-summary.message",
-                DEFAULT_STATS_SUMMARY_MESSAGE);
-
-        String warningMessage = resolveMessage(cleanerId, section, messages, "warning.message", DEFAULT_WARNING_MESSAGE);
-        String startMessage = resolveMessage(cleanerId, section, messages, "broadcast.start.message", DEFAULT_START_MESSAGE);
-        String summaryMessage = resolveMessage(cleanerId, section, messages, "broadcast.summary.message",
-            DEFAULT_SUMMARY_MESSAGE);
-        String preCleanMessage = resolveOptionalMessage(cleanerId, section, messages, "broadcast.pre-clean.message");
-
-        boolean removeHostileMobs = section.getBoolean("remove.hostile-mobs", true);
-        boolean removePassiveMobs = section.getBoolean("remove.passive-mobs", false);
-        boolean removeVillagers = section.getBoolean("remove.villagers", false);
-        boolean removeVehicles = section.getBoolean("remove.vehicles", false);
-        boolean removeDroppedItems = section.getBoolean("remove.dropped-items", true);
-        boolean removeProjectiles = section.getBoolean("remove.projectiles", true);
-        boolean removeExperienceOrbs = section.getBoolean("remove.experience-orbs", true);
-        boolean removeAreaEffectClouds = section.getBoolean("remove.area-effect-clouds", true);
-        boolean removeFallingBlocks = section.getBoolean("remove.falling-blocks", true);
-        boolean removePrimedTnt = section.getBoolean("remove.primed-tnt", true);
-
-        boolean protectPlayers = section.getBoolean("protect.players", true);
-        boolean protectArmorStands = section.getBoolean("protect.armor-stands", true);
-        boolean protectDisplayEntities = section.getBoolean("protect.display-entities", true);
-        boolean protectTamedMobs = section.getBoolean("protect.tamed-mobs", true);
-        boolean protectNameTaggedMobs = section.getBoolean("protect.name-tagged-mobs", true);
-
-        Set<String> worlds = parseWorlds(section.getStringList("worlds"));
-
-        String sectionPath = section.getCurrentPath();
-        if (sectionPath == null || sectionPath.isBlank()) {
-            sectionPath = "cleanup";
-        }
-
-        Set<EntityType> keep = parseEntityTypes(section.getStringList("entity-types.keep"), logger,
-                sectionPath + ".entity-types.keep");
-        Set<EntityType> remove = parseEntityTypes(section.getStringList("entity-types.remove"), logger,
-                sectionPath + ".entity-types.remove");
-
-        List<Pattern> nameTagPatterns = parseNameTagPatterns(
-                section.getStringList("protect.name-tag-patterns"), logger, sectionPath);
-
-        ItemMetadataFilter itemMetadataFilter = ItemMetadataFilter.parse(
-                section.getConfigurationSection("protect.item-metadata"), logger,
-                sectionPath + ".protect.item-metadata");
-
-        PileDetectionSettings pileDetectionSettings = loadPileDetectionSettings(section, logger, sectionPath);
-        boolean asyncRemoval = section.getBoolean("performance.async-removal", false);
-        int asyncRemovalBatchSize = Math.max(1, section.getInt("performance.async-removal-batch-size", 500));
-
-        com.skyblockexp.ezclean.config.CleanupCancelSettings cancelSettings = com.skyblockexp.ezclean.config.CleanupCancelSettings.disabled();
-        ConfigurationSection cancelSection = section.getConfigurationSection("cancel");
-        if (cancelSection != null) {
-            boolean cancelEnabled = cancelSection.getBoolean("enabled", true);
-            double cancelCost = cancelSection.getDouble("cost", 0.0D);
-            String hoverMessage = resolveMessage(cleanerId, section, messages, "cancel.hover-message",
-                    DEFAULT_CANCEL_HOVER_MESSAGE);
-            String successMessage = resolveMessage(cleanerId, section, messages, "cancel.success-message",
-                    DEFAULT_CANCEL_SUCCESS_MESSAGE);
-            String broadcastMessage = resolveMessage(cleanerId, section, messages, "cancel.broadcast-message",
-                    DEFAULT_CANCEL_BROADCAST_MESSAGE);
-            String insufficientFundsMessage = resolveMessage(cleanerId, section, messages,
-                    "cancel.insufficient-funds-message", DEFAULT_CANCEL_INSUFFICIENT_FUNDS_MESSAGE);
-            String disabledMessage = resolveMessage(cleanerId, section, messages, "cancel.disabled-message",
-                    DEFAULT_CANCEL_DISABLED_MESSAGE);
-            String noEconomyMessage = resolveMessage(cleanerId, section, messages, "cancel.no-economy-message",
-                    DEFAULT_CANCEL_NO_ECONOMY_MESSAGE);
-            cancelSettings = CleanupCancelSettings.create(cancelEnabled, cancelCost, hoverMessage, successMessage,
-                    broadcastMessage, insufficientFundsMessage, disabledMessage, noEconomyMessage);
-        }
-
-        long cleanupIntervalTicks = intervalMinutes * TICKS_PER_MINUTE;
-        long warningOffsetTicks = warningMinutes * TICKS_PER_MINUTE;
-
-        SpawnReasonFilter globalSpawnReasonFilter = SpawnReasonFilter.parse(
-                section.getConfigurationSection("spawn-reasons"), logger, sectionPath + ".spawn-reasons");
-
-        int globalMinPlayers = Math.max(0, section.getInt("min-players", 0));
-
-        Map<String, SpawnReasonFilter> worldSpawnReasonFilters = Collections.emptyMap();
-        Map<String, Integer> worldMinPlayersMap = new HashMap<>();
-        Map<String, Long> worldIntervalMap = new HashMap<>();
-        ConfigurationSection worldOverridesSection = section.getConfigurationSection("world-overrides");
-        if (worldOverridesSection != null) {
-            Map<String, SpawnReasonFilter> worldFilters = new HashMap<>();
-            for (String worldName : worldOverridesSection.getKeys(false)) {
-                ConfigurationSection worldSection = worldOverridesSection.getConfigurationSection(worldName);
-                if (worldSection == null) {
-                    continue;
-                }
-                SpawnReasonFilter worldFilter = SpawnReasonFilter.parse(
-                        worldSection.getConfigurationSection("spawn-reasons"), logger,
-                        sectionPath + ".world-overrides." + worldName + ".spawn-reasons");
-                worldFilters.put(worldName.toLowerCase(Locale.ROOT), worldFilter);
-                int wMin = worldSection.getInt("min-players", 0);
-                if (wMin > 0) {
-                    worldMinPlayersMap.put(worldName.toLowerCase(Locale.ROOT), wMin);
-                }
-                long wInterval = worldSection.getLong("interval-minutes", -1L);
-                if (wInterval >= 1L) {
-                    worldIntervalMap.put(worldName.toLowerCase(Locale.ROOT), wInterval);
-                }
-            }
-            if (!worldFilters.isEmpty()) {
-                worldSpawnReasonFilters = worldFilters;
-            }
-        }
-
-        List<String> postCleanupCommands = section.getStringList("post-cleanup-commands");
-
-        warnDangerousSettings(cleanerId, removePassiveMobs, removeVillagers, protectTamedMobs,
-                asyncRemoval, asyncRemovalBatchSize, remove, logger);
-
-        return new CleanupSettings(cleanerId, cleanupIntervalTicks, warningOffsetTicks, warningEnabled, startEnabled,
-                summaryEnabled, intervalEnabled, intervalMinutesBetweenBroadcasts, intervalMessage, dynamicEnabled,
-                dynamicMinutes, dynamicSeconds, dynamicMessage, statsSummaryEnabled, statsSummaryEveryRuns, statsSummaryMessage,
-                warningMessage, startMessage, summaryMessage, preCleanMessage, warningMinutes, intervalMinutes,
-                removeHostileMobs, removePassiveMobs, removeVillagers, removeVehicles, removeDroppedItems,
-                removeProjectiles, removeExperienceOrbs, removeAreaEffectClouds, removeFallingBlocks, removePrimedTnt,
-                protectPlayers, protectArmorStands, protectDisplayEntities, protectTamedMobs, protectNameTaggedMobs,
-                worlds, keep, remove, nameTagPatterns, itemMetadataFilter, pileDetectionSettings, cancelSettings,
-                asyncRemoval, asyncRemovalBatchSize, globalSpawnReasonFilter, worldSpawnReasonFilters,
-                globalMinPlayers, worldMinPlayersMap, worldIntervalMap, postCleanupCommands);
+    /** All entity removal category flags and age / proximity gates. */
+    public RemovalSettings getRemovalSettings() {
+        return removalSettings;
     }
 
-    private static String resolveMessage(String cleanerId, ConfigurationSection section, MessageConfiguration messages,
-            String path, String defaultValue) {
-        String value = section.getString(path);
-        if (value == null || value.isEmpty()) {
-            value = messages.getMessage(cleanerId, path);
-        }
-        if (value == null || value.isEmpty()) {
-            value = defaultValue;
-        }
-        return normalizeMiniMessagePlaceholders(value);
+    /** All entity protection flags, name-tag patterns, and item-metadata filter. */
+    public ProtectSettings getProtectSettings() {
+        return protectSettings;
     }
 
-    private static @Nullable PileDetectionSettings loadPileDetectionSettings(ConfigurationSection section, Logger logger,
-            String sectionPath) {
-        ConfigurationSection pileSection = section.getConfigurationSection("pile-detection");
-        if (pileSection == null) {
-            return null;
-        }
-
-        boolean enabled = pileSection.getBoolean("enabled", false);
-        if (!enabled) {
-            return null;
-        }
-
-        int threshold = pileSection.getInt("max-per-block", 200);
-        if (threshold <= 0) {
-            if (logger != null) {
-                logger.warning(() -> String.format(
-                        "Ignoring pile-detection for '%s': max-per-block must be greater than zero.", sectionPath));
-            }
-            return null;
-        }
-
-        boolean ignoreNamed = pileSection.getBoolean("ignore-named-entities", true);
-
-        Set<EntityType> trackedTypes = new HashSet<>(
-                parseEntityTypes(pileSection.getStringList("entity-types"), logger,
-                        sectionPath + ".pile-detection.entity-types"));
-        if (trackedTypes.isEmpty()) {
-            trackedTypes.add(EntityType.ITEM);
-            trackedTypes.add(EntityType.EXPERIENCE_ORB);
-        }
-
-        return new PileDetectionSettings(threshold, Collections.unmodifiableSet(trackedTypes), ignoreNamed);
+    /** Cancel-mechanic settings (cost, messages, enabled state). */
+    public CleanupCancelSettings getCancelSettings() {
+        return cancelSettings;
     }
 
-        private static @Nullable String resolveOptionalMessage(String cleanerId, ConfigurationSection section,
-            MessageConfiguration messages, String path) {
-        String value = section.getString(path);
-        if (value == null || value.isEmpty()) {
-            value = messages.getMessage(cleanerId, path);
-        }
-        if (value == null || value.isEmpty()) {
-            return null;
-        }
-        return normalizeMiniMessagePlaceholders(value);
+    /** TPS/MSPT-aware deferral settings. */
+    public TpsAwareSettings getTpsAwareSettings() {
+        return tpsAwareSettings;
     }
 
-    private static final class MessageConfiguration {
-
-        private final ConfigurationSection defaultsSection;
-        private final ConfigurationSection cleanersSection;
-
-        private MessageConfiguration(ConfigurationSection defaultsSection, ConfigurationSection cleanersSection) {
-            this.defaultsSection = defaultsSection;
-            this.cleanersSection = cleanersSection;
-        }
-
-        static MessageConfiguration from(@Nullable ConfigurationSection messagesSection) {
-            if (messagesSection == null) {
-                return new MessageConfiguration(null, null);
-            }
-            ConfigurationSection defaults = messagesSection.getConfigurationSection("defaults");
-            ConfigurationSection cleaners = messagesSection.getConfigurationSection("cleaners");
-            return new MessageConfiguration(defaults, cleaners);
-        }
-
-        String getMessage(String cleanerId, String path) {
-            String value = null;
-            if (cleanersSection != null) {
-                ConfigurationSection cleaner = cleanersSection.getConfigurationSection(cleanerId);
-                if (cleaner != null) {
-                    value = cleaner.getString(path);
-                }
-            }
-            if ((value == null || value.isEmpty()) && defaultsSection != null) {
-                value = defaultsSection.getString(path);
-            }
-            return value;
-        }
+    /** Pile-detection settings, or {@code null} when pile detection is disabled. */
+    public @Nullable PileDetectionSettings getPileDetectionSettings() {
+        return pileDetectionSettings;
     }
 
-    private static String normalizeMiniMessagePlaceholders(String template) {
-        if (template == null || template.isEmpty()) {
-            return template;
-        }
-        Matcher matcher = MINIMESSAGE_PLACEHOLDER_PATTERN.matcher(template);
-        StringBuffer result = new StringBuffer();
-        while (matcher.find()) {
-            String replacement = "<" + matcher.group(1) + ">";
-            matcher.appendReplacement(result, Matcher.quoteReplacement(replacement));
-        }
-        matcher.appendTail(result);
-        return result.toString();
+    /** Per-chunk entity cap settings, or {@code null} when chunk caps are disabled. */
+    public @Nullable ChunkCapSettings getChunkCapSettings() {
+        return chunkCapSettings;
     }
 
-    private static Set<String> parseWorlds(List<String> rawWorlds) {
-        if (rawWorlds == null || rawWorlds.isEmpty()) {
-            return Collections.singleton("*");
-        }
-        Set<String> results = new HashSet<>();
-        for (String world : rawWorlds) {
-            if (world == null || world.isBlank()) {
-                continue;
-            }
-            results.add(world.toLowerCase(Locale.ROOT));
-        }
-        if (results.isEmpty()) {
-            return Collections.singleton("*");
-        }
-        return Collections.unmodifiableSet(results);
+    /** Entity/item merging settings, or {@code null} when merging is disabled. */
+    public @Nullable MergeSettings getMergeSettings() {
+        return mergeSettings;
     }
 
-    /**
-     * Parses {@code protect.name-tag-patterns} into compiled {@link Pattern} objects.
-     * Invalid regex entries are logged as warnings and skipped.
-     */
-    private static List<Pattern> parseNameTagPatterns(List<String> raw, @Nullable Logger logger, String sectionPath) {
-        if (raw == null || raw.isEmpty()) {
-            return Collections.emptyList();
-        }
-        List<Pattern> patterns = new ArrayList<>();
-        for (String entry : raw) {
-            if (entry == null || entry.isBlank()) {
-                continue;
-            }
-            try {
-                patterns.add(Pattern.compile(entry, Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE));
-            } catch (PatternSyntaxException ex) {
-                if (logger != null) {
-                    logger.warning("Invalid protect.name-tag-patterns entry in '" + sectionPath
-                            + "': " + entry + " — " + ex.getMessage());
-                }
-            }
-        }
-        return patterns.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(patterns);
+    /** EzCountdown integration settings. */
+
+    public EzCountdownSettings getEzCountdownSettings() {
+        return ezCountdownSettings;
     }
 
-    /**
-     * Emits startup warnings for configuration combinations that are likely to cause
-     * unintended or destructive behaviour.
-     */
-    private static void warnDangerousSettings(String cleanerId, boolean removePassiveMobs,
-            boolean removeVillagers, boolean protectTamedMobs,
-            boolean asyncRemoval, int asyncRemovalBatchSize,
-            Set<EntityType> forcedRemovals, @Nullable Logger logger) {
-        if (logger == null) {
-            return;
-        }
-        if (removePassiveMobs && !protectTamedMobs) {
-            logger.warning(String.format(
-                    "[EzClean][%s] DANGEROUS CONFIG: remove.passive-mobs is true and "
-                            + "protect.tamed-mobs is false — tamed pets WILL be removed during cleanups!",
-                    cleanerId));
-        }
-        if (removeVillagers) {
-            logger.warning(String.format(
-                    "[EzClean][%s] WARNING: remove.villagers is true — villagers and wandering traders "
-                            + "will be removed. Ensure this is intentional (e.g. not on a survival or economy server).",
-                    cleanerId));
-        }
-        if (asyncRemoval && asyncRemovalBatchSize > 1000) {
-            logger.warning(String.format(
-                    "[EzClean][%s] WARNING: performance.async-removal-batch-size is very high (%d). "
-                            + "Consider reducing this to avoid hitches on large servers.",
-                    cleanerId, asyncRemovalBatchSize));
-        }
-        Set<String> bossNames = Set.of("WITHER", "ENDER_DRAGON", "WARDEN", "ELDER_GUARDIAN");
-        for (EntityType type : forcedRemovals) {
-            if (bossNames.contains(type.name())) {
-                logger.warning(String.format(
-                        "[EzClean][%s] WARNING: entity-types.remove contains '%s', which is a boss "
-                                + "entity protected by the defensive blacklist. This override is intentional "
-                                + "but may surprise players.",
-                        cleanerId, type.name()));
-            }
-        }
+    /** Spark profiler integration settings. */
+    public SparkSettings getSparkSettings() {
+        return sparkSettings;
     }
 
-    private static Set<EntityType> parseEntityTypes(List<String> entries, Logger logger, String path) {
-        if (entries == null || entries.isEmpty()) {
-            return Collections.emptySet();
-        }
-        Set<EntityType> result = new HashSet<>();
-        for (String raw : entries) {
-            if (raw == null || raw.isBlank()) {
-                continue;
-            }
-            try {
-                EntityType type = EntityType.valueOf(raw.trim().toUpperCase(Locale.ROOT));
-                result.add(type);
-            } catch (IllegalArgumentException ex) {
-                if (logger != null) {
-                    logger.warning("Unknown entity type configured at '" + path + "': " + raw);
-                }
-            }
-        }
-        return Collections.unmodifiableSet(result);
-    }
+    // -----------------------------------------------------------------------------------------
+    // Core getters
+    // -----------------------------------------------------------------------------------------
 
     public String getCleanerId() {
         return cleanerId;
@@ -643,151 +404,13 @@ public final class CleanupSettings {
         return cleanupIntervalTicks;
     }
 
-    public long getWarningOffsetTicks() {
-        return warningOffsetTicks;
-    }
-
-    public boolean isWarningEnabled() {
-        return warningEnabled;
-    }
-
-    public boolean isStartBroadcastEnabled() {
-        return startBroadcastEnabled;
-    }
-
-    public boolean isSummaryBroadcastEnabled() {
-        return summaryBroadcastEnabled;
-    }
-
-    public boolean isIntervalBroadcastEnabled() {
-        return intervalBroadcastEnabled;
-    }
-
-    public long getIntervalBroadcastMinutes() {
-        return intervalBroadcastMinutes;
-    }
-
-    public String getIntervalBroadcastMessageTemplate() {
-        return intervalBroadcastMessageTemplate;
-    }
-
-    public boolean isDynamicBroadcastEnabled() {
-        return dynamicBroadcastEnabled;
-    }
-
-    public Set<Long> getDynamicBroadcastMinutes() {
-        return dynamicBroadcastMinutes;
-    }
-
-    public Set<Long> getDynamicBroadcastSeconds() {
-        return dynamicBroadcastSeconds;
-    }
-
-    public String getDynamicBroadcastMessageTemplate() {
-        return dynamicBroadcastMessageTemplate;
-    }
-
-    public boolean isStatsSummaryBroadcastEnabled() {
-        return statsSummaryBroadcastEnabled;
-    }
-
-    public long getStatsSummaryEveryRuns() {
-        return statsSummaryEveryRuns;
-    }
-
-    public String getStatsSummaryMessageTemplate() {
-        return statsSummaryMessageTemplate;
-    }
-
-    public String getWarningMessageTemplate() {
-        return warningMessageTemplate;
-    }
-
-    public String getStartMessageTemplate() {
-        return startMessageTemplate;
-    }
-
-    public String getSummaryMessageTemplate() {
-        return summaryMessageTemplate;
-    }
-
-    public @Nullable String getPreCleanMessageTemplate() {
-        return preCleanMessageTemplate;
-    }
-
-    public long getWarningMinutesBefore() {
-        return warningMinutesBefore;
-    }
-
     public long getCleanupIntervalMinutes() {
         return cleanupIntervalMinutes;
     }
 
-    public boolean removeHostileMobs() {
-        return removeHostileMobs;
-    }
-
-    public boolean removePassiveMobs() {
-        return removePassiveMobs;
-    }
-
-    public boolean removeVillagers() {
-        return removeVillagers;
-    }
-
-    public boolean removeVehicles() {
-        return removeVehicles;
-    }
-
-    public boolean removeDroppedItems() {
-        return removeDroppedItems;
-    }
-
-    public boolean removeProjectiles() {
-        return removeProjectiles;
-    }
-
-    public boolean removeExperienceOrbs() {
-        return removeExperienceOrbs;
-    }
-
-    public boolean removeAreaEffectClouds() {
-        return removeAreaEffectClouds;
-    }
-
-    public boolean removeFallingBlocks() {
-        return removeFallingBlocks;
-    }
-
-    public boolean removePrimedTnt() {
-        return removePrimedTnt;
-    }
-
-    public boolean protectPlayers() {
-        return protectPlayers;
-    }
-
-    public boolean protectArmorStands() {
-        return protectArmorStands;
-    }
-
-    public boolean protectDisplayEntities() {
-        return protectDisplayEntities;
-    }
-
-    public boolean protectTamedMobs() {
-        return protectTamedMobs;
-    }
-
-    public boolean protectNameTaggedMobs() {
-        return protectNameTaggedMobs;
-    }
-
     public boolean isWorldEnabled(String worldName) {
-        if (enabledWorlds.contains("*")) {
-            return true;
-        }
-        return enabledWorlds.contains(worldName.toLowerCase(Locale.ROOT));
+        return enabledWorlds.contains("*")
+                || enabledWorlds.contains(worldName.toLowerCase(Locale.ROOT));
     }
 
     public Set<String> getEnabledWorlds() {
@@ -802,33 +425,6 @@ public final class CleanupSettings {
         return forcedRemovals.contains(type);
     }
 
-    /**
-     * Returns the compiled name-tag protection patterns for this profile.
-     * An empty list means <em>all</em> named mobs are protected (default behaviour).
-     * When non-empty, only mobs whose custom name matches at least one pattern are
-     * protected by the name-tagged-mobs rule.
-     */
-    public List<Pattern> getNameTagPatterns() {
-        return nameTagPatterns;
-    }
-
-    /** Returns the item-metadata protection filter for dropped items. */
-    public ItemMetadataFilter getItemMetadataFilter() {
-        return itemMetadataFilter;
-    }
-
-    public boolean isPileDetectionEnabled() {
-        return pileDetectionSettings != null;
-    }
-
-    public @Nullable PileDetectionSettings getPileDetectionSettings() {
-        return pileDetectionSettings;
-    }
-
-    public CleanupCancelSettings getCancelSettings() {
-        return cancelSettings;
-    }
-
     public boolean isAsyncRemoval() {
         return asyncRemoval;
     }
@@ -838,12 +434,8 @@ public final class CleanupSettings {
     }
 
     /**
-     * Returns the spawn-reason filter for the given world.
-     * Falls back to the global (profile-level) filter when no world-specific override
-     * is configured.
-     *
-     * @param worldName the name of the world (case-insensitive)
-     * @return the effective {@link SpawnReasonFilter} for that world
+     * Returns the spawn-reason filter for the given world, falling back to the global
+     * (profile-level) filter when no world-specific override is configured.
      */
     public SpawnReasonFilter getSpawnReasonFilter(String worldName) {
         SpawnReasonFilter worldFilter =
@@ -867,35 +459,537 @@ public final class CleanupSettings {
         return postCleanupCommands;
     }
 
-    /**
-     * Encapsulates pile detection thresholds and tracking preferences for cleanup passes.
-     */
-    public static final class PileDetectionSettings {
+    public boolean isPileDetectionEnabled() {
+        return pileDetectionSettings != null;
+    }
 
-        private final int maxPerBlock;
-        private final Set<EntityType> trackedTypes;
-        private final boolean ignoreNamedEntities;
+    public boolean isChunkCapEnabled() {
+        return chunkCapSettings != null;
+    }
 
-        private PileDetectionSettings(int maxPerBlock, Set<EntityType> trackedTypes, boolean ignoreNamedEntities) {
-            this.maxPerBlock = maxPerBlock;
-            this.trackedTypes = trackedTypes;
-            this.ignoreNamedEntities = ignoreNamedEntities;
+    public boolean isMergingEnabled() {
+        return mergeSettings != null;
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Flat delegating getters — broadcast (backward-compatible API)
+    // -----------------------------------------------------------------------------------------
+
+    public boolean isWarningEnabled() {
+        return broadcastSettings.isWarningEnabled();
+    }
+    public long getWarningOffsetTicks() {
+        return broadcastSettings.getWarningOffsetTicks();
+    }
+    public long getWarningMinutesBefore() {
+        return broadcastSettings.getWarningMinutesBefore();
+    }
+    public String getWarningMessageTemplate() {
+        return broadcastSettings.getWarningMessageTemplate();
+    }
+
+    public boolean isStartBroadcastEnabled() {
+        return broadcastSettings.isStartBroadcastEnabled();
+    }
+    public String getStartMessageTemplate() {
+        return broadcastSettings.getStartMessageTemplate();
+    }
+
+    public boolean isSummaryBroadcastEnabled() {
+        return broadcastSettings.isSummaryBroadcastEnabled();
+    }
+    public String getSummaryMessageTemplate() {
+        return broadcastSettings.getSummaryMessageTemplate();
+    }
+    public @Nullable String getPreCleanMessageTemplate() {
+        return broadcastSettings.getPreCleanMessageTemplate();
+    }
+
+    public boolean isIntervalBroadcastEnabled() {
+        return broadcastSettings.isIntervalBroadcastEnabled();
+    }
+    public long getIntervalBroadcastMinutes() {
+        return broadcastSettings.getIntervalBroadcastMinutes();
+    }
+    public String getIntervalBroadcastMessageTemplate() {
+        return broadcastSettings.getIntervalBroadcastMessageTemplate();
+    }
+
+    public boolean isDynamicBroadcastEnabled() {
+        return broadcastSettings.isDynamicBroadcastEnabled();
+    }
+    public Set<Long> getDynamicBroadcastMinutes() {
+        return broadcastSettings.getDynamicBroadcastMinutes();
+    }
+    public Set<Long> getDynamicBroadcastSeconds() {
+        return broadcastSettings.getDynamicBroadcastSeconds();
+    }
+    public String getDynamicBroadcastMessageTemplate() {
+        return broadcastSettings.getDynamicBroadcastMessageTemplate();
+    }
+
+    public boolean isStatsSummaryBroadcastEnabled() {
+        return broadcastSettings.isStatsSummaryBroadcastEnabled();
+    }
+    public long getStatsSummaryEveryRuns() {
+        return broadcastSettings.getStatsSummaryEveryRuns();
+    }
+    public String getStatsSummaryMessageTemplate() {
+        return broadcastSettings.getStatsSummaryMessageTemplate();
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Flat delegating getters — removal (backward-compatible API)
+    // -----------------------------------------------------------------------------------------
+
+    public boolean removeHostileMobs() {
+        return removalSettings.removeHostileMobs();
+    }
+    public boolean removePassiveMobs() {
+        return removalSettings.removePassiveMobs();
+    }
+    public boolean removeVillagers() {
+        return removalSettings.removeVillagers();
+    }
+    public boolean removeVehicles() {
+        return removalSettings.removeVehicles();
+    }
+    public boolean removeDroppedItems() {
+        return removalSettings.removeDroppedItems();
+    }
+    public boolean removeProjectiles() {
+        return removalSettings.removeProjectiles();
+    }
+    public boolean removeExperienceOrbs() {
+        return removalSettings.removeExperienceOrbs();
+    }
+    public boolean removeAreaEffectClouds() {
+        return removalSettings.removeAreaEffectClouds();
+    }
+    public boolean removeFallingBlocks() {
+        return removalSettings.removeFallingBlocks();
+    }
+    public boolean removePrimedTnt() {
+        return removalSettings.removePrimedTnt();
+    }
+    public int getDroppedItemsMinAgeTicks() {
+        return removalSettings.getDroppedItemsMinAgeTicks();
+    }
+    public int getExperienceOrbsMinAgeTicks() {
+        return removalSettings.getExperienceOrbsMinAgeTicks();
+    }
+    public int getItemPlayerProximityBlocks() {
+        return removalSettings.getItemPlayerProximityBlocks();
+    }
+    public int getOrbPlayerProximityBlocks() {
+        return removalSettings.getOrbPlayerProximityBlocks();
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Flat delegating getters — protection (backward-compatible API)
+    // -----------------------------------------------------------------------------------------
+
+    public boolean protectPlayers() {
+        return protectSettings.protectPlayers();
+    }
+    public boolean protectArmorStands() {
+        return protectSettings.protectArmorStands();
+    }
+    public boolean protectDisplayEntities() {
+        return protectSettings.protectDisplayEntities();
+    }
+    public boolean protectTamedMobs() {
+        return protectSettings.protectTamedMobs();
+    }
+    public boolean protectNameTaggedMobs() {
+        return protectSettings.protectNameTaggedMobs();
+    }
+    public List<Pattern> getNameTagPatterns() {
+        return protectSettings.getNameTagPatterns();
+    }
+    public ItemMetadataFilter getItemMetadataFilter() {
+        return protectSettings.getItemMetadataFilter();
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Configuration loading (private)
+    // -----------------------------------------------------------------------------------------
+
+    private static CleanupSettings loadLegacySettings(
+            FileConfiguration config, Logger logger, MessageConfiguration messages) {
+        ConfigurationSection cleanupSection = config.getConfigurationSection("cleanup");
+        if (cleanupSection == null) {
+            cleanupSection = new MemoryConfiguration();
+        }
+        return loadFromSection("default", cleanupSection, logger, messages);
+    }
+
+    private static CleanupSettings loadFromSection(String cleanerId, ConfigurationSection section,
+            Logger logger, MessageConfiguration messages) {
+        String sectionPath = section.getCurrentPath();
+        if (sectionPath == null || sectionPath.isBlank()) {
+            sectionPath = "cleanup";
         }
 
-        public int getMaxPerBlock() {
-            return maxPerBlock;
+        long intervalMinutes = Math.max(1L, section.getLong("interval-minutes", 60L));
+
+        BroadcastSettings broadcast = loadBroadcastSettings(cleanerId, section, messages, intervalMinutes);
+        RemovalSettings removal = RemovalSettings.load(section);
+        ProtectSettings protect = ProtectSettings.load(section, logger, sectionPath);
+
+        Set<String> worlds = parseWorlds(section.getStringList("worlds"));
+        Set<EntityType> keep = parseEntityTypes(
+                section.getStringList("entity-types.keep"), logger, sectionPath + ".entity-types.keep");
+        Set<EntityType> remove = parseEntityTypes(
+                section.getStringList("entity-types.remove"), logger, sectionPath + ".entity-types.remove");
+
+        PileDetectionSettings pileDetection = PileDetectionSettings.load(section, logger, sectionPath);
+        ChunkCapSettings chunkCaps = ChunkCapSettings.load(section, logger, sectionPath);
+        MergeSettings mergeSettings = MergeSettings.load(section);
+
+        boolean asyncRemoval = section.getBoolean("performance.async-removal", false);
+        int asyncBatchSize = Math.max(1, section.getInt("performance.async-removal-batch-size", 500));
+
+        CleanupCancelSettings cancelSettings = loadCancelSettings(cleanerId, section, messages);
+
+        SpawnReasonFilter globalFilter = SpawnReasonFilter.parse(
+                section.getConfigurationSection("spawn-reasons"), logger, sectionPath + ".spawn-reasons");
+
+        int globalMinPlayers = Math.max(0, section.getInt("min-players", 0));
+        Map<String, SpawnReasonFilter> worldFilters = new HashMap<>();
+        Map<String, Integer> worldMinPlayersMap = new HashMap<>();
+        Map<String, Long> worldIntervalMap = new HashMap<>();
+        loadWorldOverrides(section, logger, sectionPath, worldFilters, worldMinPlayersMap, worldIntervalMap);
+
+        List<String> postCleanupCommands = section.getStringList("post-cleanup-commands");
+        TpsAwareSettings tpsAware = TpsAwareSettings.load(section);
+        EzCountdownSettings ezCountdown = EzCountdownSettings.load(section);
+        SparkSettings spark = SparkSettings.load(section);
+
+        warnDangerousSettings(cleanerId, removal, protect, asyncRemoval, asyncBatchSize, remove, logger);
+
+        return new Builder(cleanerId)
+                .cleanupInterval(intervalMinutes * TICKS_PER_MINUTE, intervalMinutes)
+                .broadcastSettings(broadcast)
+                .removalSettings(removal)
+                .protectSettings(protect)
+                .enabledWorlds(worlds)
+                .forcedKeeps(keep)
+                .forcedRemovals(remove)
+                .cancelSettings(cancelSettings)
+                .asyncRemoval(asyncRemoval, asyncBatchSize)
+                .globalSpawnReasonFilter(globalFilter)
+                .worldSpawnReasonFilters(worldFilters.isEmpty() ? Collections.emptyMap() : worldFilters)
+                .globalMinPlayers(globalMinPlayers)
+                .worldMinPlayers(worldMinPlayersMap)
+                .worldIntervalOverrides(worldIntervalMap)
+                .postCleanupCommands(postCleanupCommands)
+                .tpsAwareSettings(tpsAware)
+                .pileDetectionSettings(pileDetection)
+                .chunkCapSettings(chunkCaps)
+                .mergeSettings(mergeSettings)
+                .ezCountdownSettings(ezCountdown)
+                .sparkSettings(spark)
+                .build();
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Sub-section loaders
+    // -----------------------------------------------------------------------------------------
+
+    private static BroadcastSettings loadBroadcastSettings(String cleanerId,
+            ConfigurationSection section, MessageConfiguration messages, long intervalMinutes) {
+        long warningMinutes = Math.max(0L, section.getLong("warning.minutes-before", 5L));
+        boolean warningEnabled = section.getBoolean("warning.enabled", warningMinutes > 0L);
+        String warningMessage = resolveMessage(cleanerId, section, messages,
+                "warning.message", DEFAULT_WARNING_MESSAGE);
+
+        boolean startEnabled = section.getBoolean("broadcast.start.enabled", true);
+        String startMessage = resolveMessage(cleanerId, section, messages,
+                "broadcast.start.message", DEFAULT_START_MESSAGE);
+
+        boolean summaryEnabled = section.getBoolean("broadcast.summary.enabled", true);
+        String summaryMessage = resolveMessage(cleanerId, section, messages,
+                "broadcast.summary.message", DEFAULT_SUMMARY_MESSAGE);
+        String preCleanMessage = resolveOptionalMessage(cleanerId, section, messages,
+                "broadcast.pre-clean.message");
+
+        ConfigurationSection intervalSection = section.getConfigurationSection("broadcast.interval");
+        boolean intervalEnabled = false;
+        long intervalMinutesBetween = 0L;
+        if (intervalSection != null) {
+            intervalEnabled = intervalSection.getBoolean("enabled", false);
+            intervalMinutesBetween = Math.max(1L, intervalSection.getLong("every-minutes", 15L));
+            if (intervalMinutesBetween <= 0L) {
+                intervalEnabled = false;
+            }
+        }
+        String intervalMessage = resolveMessage(cleanerId, section, messages,
+                "broadcast.interval.message", DEFAULT_INTERVAL_MESSAGE);
+
+        ConfigurationSection dynamicSection = section.getConfigurationSection("broadcast.dynamic");
+        boolean dynamicEnabled = false;
+        Set<Long> dynamicMinutes = Collections.emptySet();
+        Set<Long> dynamicSeconds = Collections.emptySet();
+        if (dynamicSection != null) {
+            dynamicEnabled = dynamicSection.getBoolean("enabled", false);
+            Set<Long> parsedMinutes = parseLongSet(dynamicSection.getIntegerList("minutes"));
+            if (!parsedMinutes.isEmpty()) {
+                dynamicMinutes = Collections.unmodifiableSet(parsedMinutes);
+            } else {
+                dynamicEnabled = false;
+            }
+            Set<Long> parsedSeconds = parseLongSet(dynamicSection.getIntegerList("seconds"));
+            if (!parsedSeconds.isEmpty()) {
+                dynamicSeconds = Collections.unmodifiableSet(parsedSeconds);
+            }
+        }
+        String dynamicMessage = resolveMessage(cleanerId, section, messages,
+                "broadcast.dynamic.message", DEFAULT_DYNAMIC_MESSAGE);
+
+        ConfigurationSection statsSection = section.getConfigurationSection("broadcast.stats-summary");
+        boolean statsEnabled = false;
+        long statsEveryRuns = 0L;
+        if (statsSection != null) {
+            statsEnabled = statsSection.getBoolean("enabled", false);
+            statsEveryRuns = Math.max(1L, statsSection.getLong("every-runs", 5L));
+            if (statsEveryRuns <= 0L) {
+                statsEnabled = false;
+            }
+        }
+        String statsMessage = resolveMessage(cleanerId, section, messages,
+                "stats-summary.message", DEFAULT_STATS_SUMMARY_MESSAGE);
+
+        return new BroadcastSettings(
+                warningEnabled, warningMinutes * TICKS_PER_MINUTE, warningMinutes, warningMessage,
+                startEnabled, startMessage,
+                summaryEnabled, summaryMessage, preCleanMessage,
+                intervalEnabled, intervalMinutesBetween, intervalMessage,
+                dynamicEnabled, dynamicMinutes, dynamicSeconds, dynamicMessage,
+                statsEnabled, statsEveryRuns, statsMessage);
+    }
+
+    private static CleanupCancelSettings loadCancelSettings(String cleanerId,
+            ConfigurationSection section, MessageConfiguration messages) {
+        ConfigurationSection cancelSection = section.getConfigurationSection("cancel");
+        if (cancelSection == null) {
+            return CleanupCancelSettings.disabled();
+        }
+        boolean cancelEnabled = cancelSection.getBoolean("enabled", true);
+        double cancelCost = cancelSection.getDouble("cost", 0.0D);
+        String hoverMsg = resolveMessage(cleanerId, section, messages,
+                "cancel.hover-message", DEFAULT_CANCEL_HOVER_MESSAGE);
+        String successMsg = resolveMessage(cleanerId, section, messages,
+                "cancel.success-message", DEFAULT_CANCEL_SUCCESS_MESSAGE);
+        String broadcastMsg = resolveMessage(cleanerId, section, messages,
+                "cancel.broadcast-message", DEFAULT_CANCEL_BROADCAST_MESSAGE);
+        String insufficientMsg = resolveMessage(cleanerId, section, messages,
+                "cancel.insufficient-funds-message", DEFAULT_CANCEL_INSUFFICIENT_FUNDS_MESSAGE);
+        String disabledMsg = resolveMessage(cleanerId, section, messages,
+                "cancel.disabled-message", DEFAULT_CANCEL_DISABLED_MESSAGE);
+        String noEconomyMsg = resolveMessage(cleanerId, section, messages,
+                "cancel.no-economy-message", DEFAULT_CANCEL_NO_ECONOMY_MESSAGE);
+        return CleanupCancelSettings.create(cancelEnabled, cancelCost, hoverMsg, successMsg,
+                broadcastMsg, insufficientMsg, disabledMsg, noEconomyMsg);
+    }
+
+    private static void loadWorldOverrides(ConfigurationSection section, Logger logger,
+            String sectionPath, Map<String, SpawnReasonFilter> worldFilters,
+            Map<String, Integer> worldMinPlayersMap, Map<String, Long> worldIntervalMap) {
+        ConfigurationSection overrides = section.getConfigurationSection("world-overrides");
+        if (overrides == null) {
+            return;
+        }
+        for (String worldName : overrides.getKeys(false)) {
+            ConfigurationSection worldSection = overrides.getConfigurationSection(worldName);
+            if (worldSection == null) {
+                continue;
+            }
+            SpawnReasonFilter worldFilter = SpawnReasonFilter.parse(
+                    worldSection.getConfigurationSection("spawn-reasons"), logger,
+                    sectionPath + ".world-overrides." + worldName + ".spawn-reasons");
+            worldFilters.put(worldName.toLowerCase(Locale.ROOT), worldFilter);
+            int wMin = worldSection.getInt("min-players", 0);
+            if (wMin > 0) {
+                worldMinPlayersMap.put(worldName.toLowerCase(Locale.ROOT), wMin);
+            }
+            long wInterval = worldSection.getLong("interval-minutes", -1L);
+            if (wInterval >= 1L) {
+                worldIntervalMap.put(worldName.toLowerCase(Locale.ROOT), wInterval);
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Danger warnings
+    // -----------------------------------------------------------------------------------------
+
+    private static void warnDangerousSettings(String cleanerId, RemovalSettings removal,
+            ProtectSettings protect, boolean asyncRemoval, int asyncBatchSize,
+            Set<EntityType> forcedRemovals, @Nullable Logger logger) {
+        if (logger == null) {
+            return;
+        }
+        if (removal.removePassiveMobs() && !protect.protectTamedMobs()) {
+            logger.warning(String.format(
+                    "[EzClean][%s] DANGEROUS CONFIG: remove.passive-mobs is true and "
+                            + "protect.tamed-mobs is false — tamed pets WILL be removed during cleanups!",
+                    cleanerId));
+        }
+        if (removal.removeVillagers()) {
+            logger.warning(String.format(
+                    "[EzClean][%s] WARNING: remove.villagers is true — villagers and wandering traders "
+                            + "will be removed. Ensure this is intentional (e.g. not on a survival or economy server).",
+                    cleanerId));
+        }
+        if (asyncRemoval && asyncBatchSize > 1000) {
+            logger.warning(String.format(
+                    "[EzClean][%s] WARNING: performance.async-removal-batch-size is very high (%d). "
+                            + "Consider reducing this to avoid hitches on large servers.",
+                    cleanerId, asyncBatchSize));
+        }
+        Set<String> bossNames = Set.of("WITHER", "ENDER_DRAGON", "WARDEN", "ELDER_GUARDIAN");
+        for (EntityType type : forcedRemovals) {
+            if (bossNames.contains(type.name())) {
+                logger.warning(String.format(
+                        "[EzClean][%s] WARNING: entity-types.remove contains '%s', which is a boss "
+                                + "entity protected by the defensive blacklist. This override is intentional "
+                                + "but may surprise players.",
+                        cleanerId, type.name()));
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Parse utilities
+    // -----------------------------------------------------------------------------------------
+
+    private static Set<String> parseWorlds(List<String> rawWorlds) {
+        if (rawWorlds == null || rawWorlds.isEmpty()) {
+            return Collections.singleton("*");
+        }
+        Set<String> results = new HashSet<>();
+        for (String world : rawWorlds) {
+            if (world == null || world.isBlank()) {
+                continue;
+            }
+            results.add(world.toLowerCase(Locale.ROOT));
+        }
+        return results.isEmpty() ? Collections.singleton("*") : Collections.unmodifiableSet(results);
+    }
+
+    private static Set<EntityType> parseEntityTypes(
+            List<String> entries, Logger logger, String path) {
+        if (entries == null || entries.isEmpty()) {
+            return Collections.emptySet();
+        }
+        Set<EntityType> result = new HashSet<>();
+        for (String raw : entries) {
+            if (raw == null || raw.isBlank()) {
+                continue;
+            }
+            try {
+                result.add(EntityType.valueOf(raw.trim().toUpperCase(Locale.ROOT)));
+            } catch (IllegalArgumentException ex) {
+                if (logger != null) {
+                    logger.warning(String.format("Unknown entity type '%s' at '%s'; skipping.", raw, path));
+                }
+            }
+        }
+        return Collections.unmodifiableSet(result);
+    }
+
+    private static Set<Long> parseLongSet(List<Integer> values) {
+        Set<Long> result = new LinkedHashSet<>();
+        for (Integer value : values) {
+            if (value != null && value >= 0) {
+                result.add(value.longValue());
+            }
+        }
+        return result;
+    }
+
+    private static String resolveMessage(String cleanerId, ConfigurationSection section,
+            MessageConfiguration messages, String path, String defaultValue) {
+        String value = section.getString(path);
+        if (value == null || value.isEmpty()) {
+            value = messages.getMessage(cleanerId, path);
+        }
+        if (value == null || value.isEmpty()) {
+            value = Registry.getLang().get("defaults." + path);
+        }
+        if (value == null || value.isEmpty()) {
+            value = defaultValue;
+        }
+        return normalizeMiniMessagePlaceholders(value);
+    }
+
+    private static @Nullable String resolveOptionalMessage(String cleanerId,
+            ConfigurationSection section, MessageConfiguration messages, String path) {
+        String value = section.getString(path);
+        if (value == null || value.isEmpty()) {
+            value = messages.getMessage(cleanerId, path);
+        }
+        if (value == null || value.isEmpty()) {
+            value = Registry.getLang().get("defaults." + path);
+        }
+        return (value == null || value.isEmpty()) ? null : normalizeMiniMessagePlaceholders(value);
+    }
+
+    private static String normalizeMiniMessagePlaceholders(String template) {
+        if (template == null || template.isEmpty()) {
+            return template;
+        }
+        Matcher matcher = MINIMESSAGE_PLACEHOLDER_PATTERN.matcher(template);
+        StringBuffer result = new StringBuffer();
+        while (matcher.find()) {
+            matcher.appendReplacement(result, Matcher.quoteReplacement("<" + matcher.group(1) + ">"));
+        }
+        matcher.appendTail(result);
+        return result.toString();
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // MessageConfiguration (private loading helper)
+    // -----------------------------------------------------------------------------------------
+
+    private static final class MessageConfiguration {
+
+        private final @Nullable ConfigurationSection defaultsSection;
+        private final @Nullable ConfigurationSection cleanersSection;
+
+        private MessageConfiguration(@Nullable ConfigurationSection defaultsSection,
+                @Nullable ConfigurationSection cleanersSection) {
+            this.defaultsSection = defaultsSection;
+            this.cleanersSection = cleanersSection;
         }
 
-        public Set<EntityType> getTrackedTypes() {
-            return trackedTypes;
+        static MessageConfiguration from(@Nullable ConfigurationSection messagesSection) {
+            if (messagesSection == null) {
+                return new MessageConfiguration(null, null);
+            }
+            return new MessageConfiguration(
+                    messagesSection.getConfigurationSection("defaults"),
+                    messagesSection.getConfigurationSection("cleaners"));
         }
 
-        public boolean ignoreNamedEntities() {
-            return ignoreNamedEntities;
-        }
-
-        public boolean isTracking(EntityType type) {
-            return trackedTypes.contains(type);
+        @Nullable String getMessage(String cleanerId, String path) {
+            if (cleanersSection != null) {
+                ConfigurationSection cleaner = cleanersSection.getConfigurationSection(cleanerId);
+                if (cleaner != null) {
+                    String value = cleaner.getString(path);
+                    if (value != null && !value.isEmpty()) {
+                        return value;
+                    }
+                }
+            }
+            if (defaultsSection != null) {
+                String value = defaultsSection.getString(path);
+                if (value != null && !value.isEmpty()) {
+                    return value;
+                }
+            }
+            return null;
         }
     }
 }

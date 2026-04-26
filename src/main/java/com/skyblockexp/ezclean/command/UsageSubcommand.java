@@ -77,21 +77,21 @@ public class UsageSubcommand implements Subcommand {
 
         if (stopRequested) {
             if (!(sender instanceof Player player)) {
-                sender.sendMessage(ChatColor.RED + "Only players may stop the live usage monitor.");
+                sender.sendMessage(ChatColor.RED + Msg.t("command.scheduler.stop-players-only"));
                 return true;
             }
             boolean cancelled = cancelLiveUsage(player.getUniqueId());
             if (cancelled) {
-                sender.sendMessage(ChatColor.GREEN + "Stopped the live async usage monitor.");
+                sender.sendMessage(ChatColor.GREEN + Msg.t("command.scheduler.stopped"));
             } else {
-                sender.sendMessage(ChatColor.RED + "You do not currently have a live usage monitor running.");
+                sender.sendMessage(ChatColor.RED + Msg.t("command.scheduler.no-monitor"));
             }
             return true;
         }
 
         if (liveRequested) {
             if (!(sender instanceof Player player)) {
-                sender.sendMessage(ChatColor.RED + "Only players may view the live usage monitor.");
+                sender.sendMessage(ChatColor.RED + Msg.t("command.scheduler.live-players-only"));
                 return true;
             }
             startLiveUsageMonitor(player, label, requestedPlugin);
@@ -101,14 +101,13 @@ public class UsageSubcommand implements Subcommand {
         UsageSnapshot snapshot = createUsageSnapshot(requestedPlugin);
         if (snapshot.isEmpty()) {
             if (requestedPlugin == null) {
-                sender.sendMessage(ChatColor.GREEN + "No scheduler activity detected.");
+                sender.sendMessage(ChatColor.GREEN + Msg.t("command.scheduler.no-activity"));
             } else {
-                sender.sendMessage(ChatColor.RED + "No scheduler activity found for plugin \"" + requestedPlugin + "\".");
+                sender.sendMessage(ChatColor.RED + Msg.t("command.scheduler.no-activity-plugin", "name", requestedPlugin));
             }
             if (sender instanceof Player) {
-                sender.sendMessage(ChatColor.DARK_GRAY + "Tip: Use /" + label + " usage live"
-                        + (requestedPlugin != null ? " " + requestedPlugin : "")
-                        + " for a live async graph. Use /" + label + " usage stop to cancel.");
+                String suffix = requestedPlugin != null ? " " + requestedPlugin : "";
+                sender.sendMessage(ChatColor.DARK_GRAY + Msg.t("command.scheduler.tip", "label", label, "suffix", suffix));
             }
             return true;
         }
@@ -174,7 +173,7 @@ public class UsageSubcommand implements Subcommand {
         List<String> lines = new ArrayList<>();
 
         String headerColor = live ? ChatColor.DARK_AQUA.toString() : ChatColor.GOLD.toString();
-        String headerTitle = live ? "Live async scheduler usage" : "Scheduler usage overview";
+        String headerTitle = live ? Msg.t("command.scheduler.header-live") : Msg.t("command.scheduler.header-static");
         StringBuilder headerBuilder = new StringBuilder();
         headerBuilder.append(headerColor).append(ChatColor.BOLD).append(headerTitle).append(ChatColor.RESET)
                 .append(ChatColor.DARK_GRAY).append(" • plugins: ").append(ChatColor.AQUA)
@@ -187,12 +186,12 @@ public class UsageSubcommand implements Subcommand {
 
         if (snapshot.isEmpty()) {
             if (filter == null || filter.isEmpty()) {
-                lines.add(ChatColor.GRAY + "No scheduler activity detected.");
+                lines.add(ChatColor.GRAY + Msg.t("command.scheduler.no-activity"));
             } else {
-                lines.add(ChatColor.GRAY + "No scheduler activity currently matches the filter.");
+                lines.add(ChatColor.GRAY + Msg.t("command.scheduler.no-activity-filter"));
             }
             if (includeInstructions) {
-                lines.add(ChatColor.DARK_GRAY + "Use /" + label + " usage stop to cancel the live view.");
+                lines.add(ChatColor.DARK_GRAY + Msg.t("command.scheduler.stop-live", "label", label));
             }
             return lines;
         }
@@ -226,14 +225,15 @@ public class UsageSubcommand implements Subcommand {
 
         if (snapshot.pluginCount() > limit) {
             int remaining = snapshot.pluginCount() - limit;
-            lines.add(ChatColor.DARK_GRAY + "… plus " + ChatColor.AQUA + remaining + ChatColor.DARK_GRAY
-                    + " more plugin" + (remaining == 1 ? "" : "s") + ".");
+            String moreMsg = remaining == 1
+                    ? Msg.t("command.scheduler.more-plugins-s", "n", String.valueOf(remaining))
+                    : Msg.t("command.scheduler.more-plugins-p", "n", String.valueOf(remaining));
+            lines.add(ChatColor.DARK_GRAY + moreMsg);
         }
 
         if (includeInstructions) {
-            lines.add(ChatColor.DARK_GRAY + "Tip: Use /" + label + " usage live"
-                    + (filter != null && !filter.isEmpty() ? " " + filter : "")
-                    + " for a live async graph. Use /" + label + " usage stop to cancel.");
+            String suffix = (filter != null && !filter.isEmpty()) ? " " + filter : "";
+            lines.add(ChatColor.DARK_GRAY + Msg.t("command.scheduler.tip", "label", label, "suffix", suffix));
         }
 
         return lines;
@@ -310,15 +310,9 @@ public class UsageSubcommand implements Subcommand {
         UUID playerId = player.getUniqueId();
         cancelLiveUsage(playerId);
 
-        StringBuilder message = new StringBuilder();
-        message.append(ChatColor.GREEN).append("Started live async usage monitor");
-        if (filter != null && !filter.isEmpty()) {
-            message.append(" for \"").append(filter).append("\"");
-        }
-        message.append(". Use /").append(label).append(" usage stop to cancel.");
-        player.sendMessage(message.toString());
-        player.sendMessage(ChatColor.DARK_GRAY + "Live summaries refresh in your action bar. Chat updates"
-                + " appear when the load meaningfully changes.");
+        String filterSuffix = (filter != null && !filter.isEmpty()) ? " \"" + filter + "\"" : "";
+        player.sendMessage(ChatColor.GREEN + Msg.t("command.scheduler.started", "suffix", filterSuffix, "label", label));
+        player.sendMessage(ChatColor.DARK_GRAY + Msg.t("command.scheduler.live-hint"));
 
         LiveUsageSubscription subscription = new LiveUsageSubscription();
         Runnable[] cancelRef = new Runnable[1];

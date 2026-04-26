@@ -41,7 +41,7 @@ class EntityCleanupSchedulerRemovalTest {
         void passiveMobsRequireExplicitToggle() {
         com.skyblockexp.ezclean.config.CleanupSettings disabledSettings = createSettings(false, false, false);
         com.skyblockexp.ezclean.scheduler.EntityCleanupScheduler scheduler = new com.skyblockexp.ezclean.scheduler.EntityCleanupScheduler(plugin,
-            Collections.singletonList(disabledSettings), worldGuardBypass, statsTracker);
+            Collections.singletonList(disabledSettings), worldGuardBypass, statsTracker, null);
 
         Animals cow = Mockito.mock(Animals.class);
         Mockito.when(cow.getType()).thenReturn(EntityType.COW);
@@ -50,7 +50,7 @@ class EntityCleanupSchedulerRemovalTest {
             "Passive mobs should be preserved when the toggle is disabled");
 
         com.skyblockexp.ezclean.config.CleanupSettings enabledSettings = createSettings(true, false, false);
-        scheduler = new com.skyblockexp.ezclean.scheduler.EntityCleanupScheduler(plugin, Collections.singletonList(enabledSettings), worldGuardBypass, statsTracker);
+        scheduler = new com.skyblockexp.ezclean.scheduler.EntityCleanupScheduler(plugin, Collections.singletonList(enabledSettings), worldGuardBypass, statsTracker, null);
 
         Animals sheep = Mockito.mock(Animals.class);
         Mockito.when(sheep.getType()).thenReturn(EntityType.SHEEP);
@@ -63,7 +63,7 @@ class EntityCleanupSchedulerRemovalTest {
         void villagersRequireDedicatedToggle() {
         com.skyblockexp.ezclean.config.CleanupSettings passiveEnabledVillagersDisabled = createSettings(true, false, false);
         com.skyblockexp.ezclean.scheduler.EntityCleanupScheduler scheduler = new com.skyblockexp.ezclean.scheduler.EntityCleanupScheduler(plugin,
-            Collections.singletonList(passiveEnabledVillagersDisabled), worldGuardBypass, statsTracker);
+            Collections.singletonList(passiveEnabledVillagersDisabled), worldGuardBypass, statsTracker, null);
 
         AbstractVillager villager = Mockito.mock(AbstractVillager.class);
         Mockito.when(villager.getType()).thenReturn(EntityType.VILLAGER);
@@ -72,7 +72,7 @@ class EntityCleanupSchedulerRemovalTest {
             "Villagers should not be culled unless the villager toggle is enabled");
 
         com.skyblockexp.ezclean.config.CleanupSettings villagersEnabled = createSettings(false, true, false);
-        scheduler = new com.skyblockexp.ezclean.scheduler.EntityCleanupScheduler(plugin, Collections.singletonList(villagersEnabled), worldGuardBypass, statsTracker);
+        scheduler = new com.skyblockexp.ezclean.scheduler.EntityCleanupScheduler(plugin, Collections.singletonList(villagersEnabled), worldGuardBypass, statsTracker, null);
 
         AbstractVillager trader = Mockito.mock(AbstractVillager.class);
         Mockito.when(trader.getType()).thenReturn(EntityType.WANDERING_TRADER);
@@ -85,7 +85,7 @@ class EntityCleanupSchedulerRemovalTest {
         void vehiclesRequireExplicitToggle() {
         com.skyblockexp.ezclean.config.CleanupSettings disabledSettings = createSettings(false, false, false);
         com.skyblockexp.ezclean.scheduler.EntityCleanupScheduler scheduler = new com.skyblockexp.ezclean.scheduler.EntityCleanupScheduler(plugin,
-            Collections.singletonList(disabledSettings), worldGuardBypass, statsTracker);
+            Collections.singletonList(disabledSettings), worldGuardBypass, statsTracker, null);
 
         Vehicle boat = Mockito.mock(Vehicle.class);
         Mockito.when(boat.getType()).thenReturn(resolveVehicleType("BOAT"));
@@ -94,7 +94,7 @@ class EntityCleanupSchedulerRemovalTest {
             "Vehicles should be preserved when the toggle is disabled");
 
         com.skyblockexp.ezclean.config.CleanupSettings enabledSettings = createSettings(false, false, true);
-        scheduler = new com.skyblockexp.ezclean.scheduler.EntityCleanupScheduler(plugin, Collections.singletonList(enabledSettings), worldGuardBypass, statsTracker);
+        scheduler = new com.skyblockexp.ezclean.scheduler.EntityCleanupScheduler(plugin, Collections.singletonList(enabledSettings), worldGuardBypass, statsTracker, null);
 
         Vehicle minecart = Mockito.mock(Vehicle.class);
         Mockito.when(minecart.getType()).thenReturn(EntityType.MINECART);
@@ -107,7 +107,7 @@ class EntityCleanupSchedulerRemovalTest {
         void removesVehicleTypesWithoutVehicleInterface() {
         com.skyblockexp.ezclean.config.CleanupSettings enabledSettings = createSettings(false, false, true);
         com.skyblockexp.ezclean.scheduler.EntityCleanupScheduler scheduler = new com.skyblockexp.ezclean.scheduler.EntityCleanupScheduler(plugin,
-            Collections.singletonList(enabledSettings), worldGuardBypass, statsTracker);
+            Collections.singletonList(enabledSettings), worldGuardBypass, statsTracker, null);
 
         EntityType vehicleType = resolveVehicleType("CHEST_BOAT", "MINECART_CHEST", "MINECART_HOPPER",
             "MINECART_FURNACE", "MINECART_TNT", "MINECART");

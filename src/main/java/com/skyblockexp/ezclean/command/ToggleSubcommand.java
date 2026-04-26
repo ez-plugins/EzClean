@@ -2,7 +2,9 @@ package com.skyblockexp.ezclean.command;
 
 import com.skyblockexp.ezclean.EzCleanPlugin;
 import com.skyblockexp.ezclean.scheduler.EntityCleanupScheduler;
-import org.bukkit.ChatColor;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.YamlConfiguration;
 
@@ -67,9 +69,11 @@ public class ToggleSubcommand implements Subcommand {
             return true;
         }
 
-        List<String> all = getAllFeatures();
-        sender.sendMessage(ChatColor.RED + "Unknown feature \"" + args[0] + "\". Available: "
-                + String.join(", ", all));
+        sender.sendMessage(Msg.error(Msg.t("command.toggle.unknown-feature", "name", args[0])));
+        sender.sendMessage(Component.text(Msg.t("command.toggle.cleaner-features"), NamedTextColor.GRAY)
+                .append(Component.text(String.join(", ", CLEANER_FEATURES), NamedTextColor.AQUA)));
+        sender.sendMessage(Component.text(Msg.t("command.toggle.global-features"), NamedTextColor.GRAY)
+                .append(Component.text(String.join(", ", GLOBAL_FEATURES), NamedTextColor.AQUA)));
         return true;
     }
 
@@ -87,76 +91,86 @@ public class ToggleSubcommand implements Subcommand {
                 }
             }
             if (cleanerId == null) {
-                sender.sendMessage(ChatColor.RED + "No cleaner profile matches \"" + args[1] + "\". "
-                        + "Available: " + String.join(", ", ids));
+                sender.sendMessage(Msg.PREFIX
+                        .append(Component.text(Msg.t("command.toggle.no-match", "id", args[1]), NamedTextColor.RED))
+                        .append(Component.text(Msg.t("command.toggle.available"), NamedTextColor.GRAY))
+                        .append(Component.text(String.join(", ", ids), NamedTextColor.AQUA)));
                 return;
             }
         } else if (ids.size() == 1) {
             cleanerId = ids.get(0);
         } else {
-            sender.sendMessage(ChatColor.RED + "Multiple cleaner profiles are configured. "
-                    + "Specify one: " + String.join(", ", ids));
+            sender.sendMessage(Msg.PREFIX
+                    .append(Component.text(Msg.t("command.toggle.multiple"), NamedTextColor.RED))
+                    .append(Component.text(String.join(", ", ids), NamedTextColor.AQUA)));
             return;
         }
 
         File cleanerFile = new File(plugin.getDataFolder(), "cleaners/" + cleanerId + ".yml");
         if (!cleanerFile.exists()) {
-            sender.sendMessage(ChatColor.RED + "No cleaner config file found for \"" + cleanerId + "\".");
+            sender.sendMessage(Msg.error(Msg.t("command.toggle.no-file", "id", cleanerId)));
             return;
         }
 
         YamlConfiguration config = YamlConfiguration.loadConfiguration(cleanerFile);
         String configKey = featureToConfigKey(feature);
-        boolean newValue = !config.getBoolean(configKey, false);
+        boolean oldValue = config.getBoolean(configKey, false);
+        boolean newValue = !oldValue;
         config.set(configKey, newValue);
 
         try {
             config.save(cleanerFile);
         } catch (IOException ex) {
-            sender.sendMessage(ChatColor.RED + "Failed to save config for cleaner \""
-                    + cleanerId + "\": " + ex.getMessage());
+            sender.sendMessage(Msg.error(Msg.t("command.toggle.save-failed", "id", cleanerId, "error", ex.getMessage())));
             plugin.getLogger().warning("Failed to save cleaner config '" + cleanerFile.getName()
                     + "': " + ex.getMessage());
             return;
         }
 
         plugin.reloadPluginConfiguration();
-        sender.sendMessage(ChatColor.GREEN + "Toggled " + ChatColor.AQUA + feature
-                + ChatColor.GREEN + " for cleaner " + ChatColor.AQUA + cleanerId
-                + ChatColor.GREEN + ": " + ChatColor.YELLOW + (newValue ? "enabled" : "disabled")
-                + ChatColor.GREEN + ". Configuration reloaded.");
+        sender.sendMessage(Msg.PREFIX
+                .append(Component.text(feature, NamedTextColor.AQUA, TextDecoration.BOLD))
+                .append(Component.text(" [", NamedTextColor.DARK_GRAY))
+                .append(Component.text(cleanerId, NamedTextColor.AQUA))
+                .append(Component.text("]: ", NamedTextColor.DARK_GRAY))
+                .append(Component.text(oldValue ? Msg.t("command.toggle.on") : Msg.t("command.toggle.off"), oldValue ? NamedTextColor.GREEN : NamedTextColor.RED))
+                .append(Component.text(" → ", NamedTextColor.DARK_GRAY))
+                .append(Component.text(newValue ? Msg.t("command.toggle.on") : Msg.t("command.toggle.off"), newValue ? NamedTextColor.GREEN : NamedTextColor.RED)));
     }
 
     private void toggleGlobal(CommandSender sender, String feature) {
         File globalFile = resolveGlobalFile(feature);
         if (globalFile == null) {
-            sender.sendMessage(ChatColor.RED + "Cannot resolve config file for feature \"" + feature + "\".");
+            sender.sendMessage(Msg.error(Msg.t("command.toggle.no-global-file", "name", feature)));
             return;
         }
         if (!globalFile.exists()) {
-            sender.sendMessage(ChatColor.RED + "Configuration file for \"" + feature + "\" not found. "
-                    + "Start the server once to generate it.");
+            sender.sendMessage(Msg.error(Msg.t("command.toggle.no-global-file-missing", "name", feature)));
             return;
         }
 
         YamlConfiguration config = YamlConfiguration.loadConfiguration(globalFile);
         String configKey = featureToConfigKey(feature);
-        boolean newValue = !config.getBoolean(configKey, false);
+        boolean oldValue = config.getBoolean(configKey, false);
+        boolean newValue = !oldValue;
         config.set(configKey, newValue);
 
         try {
             config.save(globalFile);
         } catch (IOException ex) {
-            sender.sendMessage(ChatColor.RED + "Failed to save config: " + ex.getMessage());
+            sender.sendMessage(Msg.error(Msg.t("command.toggle.save-failed-global", "error", ex.getMessage())));
             plugin.getLogger().warning("Failed to save global config '" + globalFile.getName()
                     + "': " + ex.getMessage());
             return;
         }
 
         plugin.reloadPluginConfiguration();
-        sender.sendMessage(ChatColor.GREEN + "Toggled " + ChatColor.AQUA + feature
-                + ChatColor.GREEN + ": " + ChatColor.YELLOW + (newValue ? "enabled" : "disabled")
-                + ChatColor.GREEN + ". Configuration reloaded.");
+        sender.sendMessage(Msg.PREFIX
+                .append(Component.text(feature, NamedTextColor.AQUA, TextDecoration.BOLD))
+                .append(Component.text(": ", NamedTextColor.DARK_GRAY))
+                .append(Component.text(oldValue ? Msg.t("command.toggle.on") : Msg.t("command.toggle.off"), oldValue ? NamedTextColor.GREEN : NamedTextColor.RED))
+                .append(Component.text(" → ", NamedTextColor.DARK_GRAY))
+                .append(Component.text(newValue ? Msg.t("command.toggle.on") : Msg.t("command.toggle.off"), newValue ? NamedTextColor.GREEN : NamedTextColor.RED)));
     }
 
     private String featureToConfigKey(String feature) {
@@ -181,11 +195,11 @@ public class ToggleSubcommand implements Subcommand {
     }
 
     private void sendUsage(CommandSender sender, String label) {
-        sender.sendMessage(ChatColor.YELLOW + "Usage: /" + label + " toggle <feature> [cleaner_id]");
-        sender.sendMessage(ChatColor.GRAY + "Cleaner features: " + ChatColor.AQUA
-                + String.join(", ", CLEANER_FEATURES));
-        sender.sendMessage(ChatColor.GRAY + "Global features:  " + ChatColor.AQUA
-                + String.join(", ", GLOBAL_FEATURES));
+        sender.sendMessage(Msg.warn("Usage: /" + label + " toggle <feature> [cleaner_id]"));
+        sender.sendMessage(Component.text(Msg.t("command.toggle.cleaner-features"), NamedTextColor.GRAY)
+                .append(Component.text(String.join(", ", CLEANER_FEATURES), NamedTextColor.AQUA)));
+        sender.sendMessage(Component.text(Msg.t("command.toggle.global-features"), NamedTextColor.GRAY)
+                .append(Component.text(String.join(", ", GLOBAL_FEATURES), NamedTextColor.AQUA)));
     }
 
     private List<String> getAllFeatures() {

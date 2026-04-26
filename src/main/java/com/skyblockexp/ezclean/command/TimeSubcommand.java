@@ -1,7 +1,11 @@
 package com.skyblockexp.ezclean.command;
 
 import com.skyblockexp.ezclean.scheduler.EntityCleanupScheduler;
-import org.bukkit.ChatColor;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickEvent;
+import net.kyori.adventure.text.event.HoverEvent;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.command.CommandSender;
 import java.time.Duration;
 import java.util.List;
@@ -22,7 +26,7 @@ public class TimeSubcommand implements Subcommand {
     public boolean execute(CommandSender sender, String label, String[] args) {
         List<String> cleanerIds = cleanupScheduler.getCleanerIds();
         if (cleanerIds.isEmpty()) {
-            sender.sendMessage(ChatColor.RED + "No cleanup profiles are currently configured.");
+            sender.sendMessage(Msg.error(Msg.t("command.no-profiles")));
             return true;
         }
 
@@ -36,8 +40,27 @@ public class TimeSubcommand implements Subcommand {
             if (cleanerIds.size() == 1) {
                 cleanerId = cleanerIds.get(0);
             } else {
-                sender.sendMessage(ChatColor.RED + "Multiple cleanup profiles available. Specify one of: "
-                        + String.join(", ", cleanerIds));
+                // Show all profiles as a clickable list
+                sender.sendMessage(Msg.PREFIX
+                        .append(Component.text(Msg.t("command.time.header"), NamedTextColor.GOLD, TextDecoration.BOLD)));
+                for (String id : cleanerIds) {
+                    Duration remaining = cleanupScheduler.getTimeUntilCleanup(id);
+                    Component timeText = remaining == null
+                            ? Component.text(Msg.t("command.time.not-scheduled"), NamedTextColor.RED)
+                            : Component.text(Msg.formatDuration(remaining), NamedTextColor.GREEN);
+
+                    String cancelCmd = "/" + label + " cancel " + id;
+                    Component row = Component.text("  " + id, NamedTextColor.AQUA)
+                            .append(Component.text(" — ", NamedTextColor.DARK_GRAY))
+                            .append(timeText);
+
+                    if (remaining != null) {
+                        row = row.hoverEvent(HoverEvent.showText(
+                                        Component.text(Msg.t("command.time.hover-cancel", "id", id), NamedTextColor.YELLOW)))
+                                .clickEvent(ClickEvent.suggestCommand(cancelCmd));
+                    }
+                    sender.sendMessage(row);
+                }
                 return true;
             }
         } else {
@@ -49,19 +72,18 @@ public class TimeSubcommand implements Subcommand {
                 }
             }
             if (cleanerId == null) {
-                sender.sendMessage(ChatColor.RED + "No cleanup profile matches \"" + requestedId + "\".");
+                sender.sendMessage(Msg.error(Msg.t("command.time.no-match", "id", requestedId)));
                 return true;
             }
         }
 
         Duration timeRemaining = cleanupScheduler.getTimeUntilCleanup(cleanerId);
         if (timeRemaining == null) {
-            sender.sendMessage(ChatColor.RED + "That cleanup profile is not currently scheduled.");
+            sender.sendMessage(Msg.warn(Msg.t("command.time.idle", "id", cleanerId)));
             return true;
         }
 
-        sender.sendMessage(ChatColor.GREEN + "Cleanup for profile \"" + cleanerId + "\" will run in "
-                + formatDuration(timeRemaining) + ".");
+        sender.sendMessage(Msg.success(Msg.t("command.time.result", "id", cleanerId, "duration", Msg.formatDuration(timeRemaining))));
         return true;
     }
 
@@ -86,44 +108,7 @@ public class TimeSubcommand implements Subcommand {
         return java.util.Collections.emptyList();
     }
 
-    private String formatDuration(Duration duration) {
-        if (duration == null || duration.isZero() || duration.isNegative()) {
-            return "less than a minute";
-        }
-
-        long totalSeconds = duration.getSeconds();
-        if (totalSeconds <= 0L) {
-            return "less than a minute";
-        }
-
-        long hours = totalSeconds / 3600L;
-        long minutes = (totalSeconds % 3600L) / 60L;
-        long seconds = totalSeconds % 60L;
-
-        if (hours > 0L) {
-            if (minutes > 0L) {
-                return hours + " hour" + (hours == 1L ? "" : "s") + " and " + minutes + " minute"
-                        + (minutes == 1L ? "" : "s");
-            }
-            if (seconds > 0L) {
-                return hours + " hour" + (hours == 1L ? "" : "s") + " and " + seconds + " second"
-                        + (seconds == 1L ? "" : "s");
-            }
-            return hours + " hour" + (hours == 1L ? "" : "s");
-        }
-
-        if (minutes > 0L) {
-            if (seconds > 0L) {
-                return minutes + " minute" + (minutes == 1L ? "" : "s") + " and " + seconds + " second"
-                        + (seconds == 1L ? "" : "s");
-            }
-            return minutes + " minute" + (minutes == 1L ? "" : "s");
-        }
-
-        return seconds + " second" + (seconds == 1L ? "" : "s");
-    }
-
     private void sendUsage(CommandSender sender, String label) {
-        sender.sendMessage(ChatColor.RED + "Usage: /" + label + " time [cleaner_id]");
+        sender.sendMessage(Msg.error("Usage: /" + label + " time [cleaner_id]"));
     }
 }

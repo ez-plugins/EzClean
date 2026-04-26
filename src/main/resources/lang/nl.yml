@@ -1,0 +1,174 @@
+# EzClean — Nederlands taalbestand (nl)
+
+# ── Tijdopmaak ──────────────────────────────────────────────────────────────
+format:
+  duration:
+    instant: "minder dan een minuut"
+    hour-s: "uur"
+    hour-p: "uur"
+    minute-s: "minuut"
+    minute-p: "minuten"
+    second-s: "seconde"
+    second-p: "seconden"
+    joiner: " en "
+  not-available: "N/B"
+  entries:
+    none: "Geen"
+    more: "+{n} meer"
+    removed: "verwijderd"
+
+# ── Commandoberichten ────────────────────────────────────────────────────────
+command:
+  no-profiles: "Er zijn momenteel geen opruimingsprofielen geconfigureerd."
+  no-permission: "Je hebt geen toestemming om dit commando te gebruiken."
+  unknown-subcommand: "Onbekend subcommando \"{name}\". Gebruik /{label} help voor beschikbare commando's."
+
+  # /ezclean (hoofdgebruik)
+  main:
+    subtitle: "Geautomatiseerde entiteitsopruiming voor Minecraft-servers"
+    quick-commands: "Snelle commando's:"
+    footer: "Gebruik /{label} help voor alle beschikbare commando's."
+    cmd-help: "Gedetailleerde commandohulp weergeven"
+    cmd-run: "Opruiming handmatig starten"
+    cmd-time: "Tijd tot volgende opruiming controleren"
+    cmd-stats: "Opruimingsstatistieken bekijken"
+
+  # /ezclean help
+  help:
+    title: "Commandoreferentie"
+    section-player: "Spelerscommando's"
+    section-admin: "Beheerderscommando's"
+    hover-fill: "Klik om commando in te vullen"
+    id-note: "[id] = profiel-ID van de opruimer. Weglaten als er slechts één profiel is."
+    cmd-time: "Tijd tot volgende opruiming"
+    cmd-cancel: "Aankomende opruiming uitstellen"
+    cmd-stats: "Opruimingsstatistieken bekijken"
+    cmd-help: "Dit bericht weergeven"
+    cmd-run: "Een opruimingscyclus nu starten"
+    cmd-reload: "Plugin-configuratie herladen"
+    cmd-setup: "Interactieve setup-GUI openen"
+    cmd-toggle: "Een functie aan/uitzetten"
+    cmd-usage: "Plannertaken inspecteren"
+
+  # /ezclean time
+  time:
+    header: "Opruimingstimers"
+    not-scheduled: "niet gepland"
+    hover-cancel: "Klik om opruiming {id} te annuleren"
+    idle: "\"{id}\" is momenteel niet gepland."
+    result: "Opruiming voor \"{id}\" start over {duration}."
+    no-match: "Geen opruimingsprofiel gevonden voor \"{id}\"."
+
+  # /ezclean run
+  run:
+    multiple: "Meerdere opruimingsprofielen beschikbaar. Geef er één op: {ids}"
+    no-match: "Geen opruimingsprofiel gevonden voor \"{id}\"."
+    available: " Beschikbaar: "
+    idle: "\"{id}\" is momenteel niet gepland."
+    triggered: "Opruiming gestart voor \"{id}\"."
+
+  # /ezclean reload
+  reload:
+    success: "Configuratie herladen."
+    loaded-prefix: " Geladen: "
+    profile-single: "1 profiel"
+    profiles-plural: "{n} profielen"
+    colon: ": "
+    none: "geen"
+
+  # /ezclean stats
+  stats:
+    header: "Opruimingsstatistieken voor "
+    multiple: "Meerdere profielen beschikbaar. Geef er één op: "
+    no-match: "Geen opruimingsprofiel gevonden voor \"{id}\"."
+    no-stats: "Nog geen opruimingsstatistieken opgeslagen voor \"{id}\"."
+    row-total-runs: "Totaal uitgevoerd"
+    row-total-removed: "Totaal verwijderd"
+    row-avg-duration: "Gem. duur"
+    row-avg-tps: "Gem. TPS-impact"
+    top-groups: "  Topentiteitsgroepen:"
+    top-worlds: "  Topwerelden:"
+    last-run: "Laatste uitvoering"
+    last-removed: "  Verwijderd"
+    last-duration: "  Duur"
+    last-tps: "  TPS-impact"
+    last-groups: "    Groepen:"
+    last-worlds: "    Werelden:"
+
+  # /ezclean toggle
+  toggle:
+    unknown-feature: "Onbekende functie \"{name}\"."
+    cleaner-features: "  Opruimerfuncties: "
+    global-features: "  Algemene functies: "
+    no-match: "Geen opruimerprofiel gevonden voor \"{id}\"."
+    available: " Beschikbaar: "
+    multiple: "Meerdere opruimerprofielen geconfigureerd. Geef er één op: "
+    no-file: "Geen configuratiebestand gevonden voor opruimer \"{id}\"."
+    save-failed: "Opslaan van configuratie voor opruimer \"{id}\" mislukt: {error}"
+    save-failed-global: "Opslaan van configuratie mislukt: {error}"
+    no-global-file: "Configuratiebestand voor functie \"{name}\" kan niet worden gevonden."
+    no-global-file-missing: "Configuratiebestand voor \"{name}\" niet gevonden. Start de server eenmalig om het te genereren."
+    on: "AAN"
+    off: "UIT"
+
+  # /ezclean cancel
+  cancel:
+    players-only: "Alleen spelers kunnen opruimingscycli annuleren."
+    multiple: "Meerdere profielen beschikbaar. Geef er één op: "
+    available-label: "Beschikbaar: "
+    no-match: "Geen profiel gevonden voor \"{id}\". "
+    no-match-simple: "Geen opruimingsprofiel gevonden voor \"{id}\"."
+    idle: "\"{id}\" is momenteel niet gepland."
+    funding-error: "Kan geld niet afschrijven: {error}"
+    cancel-failed: "Annuleren van de aankomende opruiming is mislukt."
+
+  # /ezclean usage (planner-monitor)
+  scheduler:
+    stop-players-only: "Alleen spelers kunnen de live gebruiksmonitor stoppen."
+    stopped: "Live asynchrone gebruiksmonitor gestopt."
+    no-monitor: "Je hebt momenteel geen actieve live gebruiksmonitor."
+    live-players-only: "Alleen spelers kunnen de live gebruiksmonitor bekijken."
+    no-activity: "Geen planneractiveiteit gedetecteerd."
+    no-activity-plugin: "Geen planneractiveiteit gevonden voor plugin \"{name}\"."
+    tip: "Tip: Gebruik /{label} usage live{suffix} voor een live asynchroon overzicht. Gebruik /{label} usage stop om te annuleren."
+    started: "Live asynchrone gebruiksmonitor gestart{suffix}. Gebruik /{label} usage stop om te annuleren."
+    live-hint: "Live samenvatting verschijnt in je actiebalk. Chat-updates verschijnen bij significante wijzigingen."
+    header-live: "Live asynchroon planneroverzicht"
+    header-static: "Planneroverzicht"
+    no-activity-filter: "Geen planneractiveiteit die overeenkomt met het filter."
+    stop-live: "Gebruik /{label} usage stop om de live weergave te annuleren."
+    more-plugins-s: "\u2026 plus {n} plugin meer."
+    more-plugins-p: "\u2026 plus {n} plugins meer."
+  # /ezclean setup
+  setup:
+    players-only: "De setup-GUI kan alleen worden geopend door een speler."
+# ── Update-melding ───────────────────────────────────────────────────────────
+update:
+  available: "EzClean-update beschikbaar: v{version}. "
+  download: "[Downloaden]"
+
+# ── Standaard uitzendberichtinhoud ───────────────────────────────────────────
+# MiniMessage-opmaak; placeholders gebruik {name}-stijl.
+defaults:
+  warning:
+    message: "<yellow>\u26a0 Entiteitsopruiming over <gold>{minutes}</gold> minuten. Ruim waardevolle spullen op!</yellow>"
+  broadcast:
+    start:
+      message: "<red><bold>\u2726 Entiteitsopruiming begint nu...</bold></red>"
+    summary:
+      message: "<gray>\u2713 <gold>{count}</gold> entiteiten verwijderd. Volgende opruiming over <gold>{minutes}</gold> minuten.</gray>"
+    pre-clean:
+      message: ""
+    interval:
+      message: "<yellow>\u26a0 Entiteitsopruiming over <gold>{minutes}</gold> minuten. Ruim waardevolle spullen op!</yellow>"
+    dynamic:
+      message: "<yellow>\u26a0 Entiteitsopruiming over <gold>{minutes}</gold> minuten. Ruim waardevolle spullen op!</yellow>"
+  stats-summary:
+    message: "<gray>Opruimingsstatistieken voor <aqua>{cleaner}</aqua>: <gold>{runs}</gold> keer uitgevoerd, <gold>{total_removed}</gold> verwijderd. Gem. duur: <gold>{avg_duration}</gold>. Gem. TPS-impact: <gold>{avg_tps_impact}</gold>. Topgroepen: {top_groups}. Topwerelden: {top_worlds}.</gray>"
+  cancel:
+    hover-message: "<yellow>Klik om <gold>{cost}</gold> te betalen en deze opruiming te annuleren.</yellow>"
+    success-message: "<green>Je hebt <gold>{cost}</gold> betaald om de <aqua>{cleaner}</aqua>-opruiming te annuleren.</green>"
+    broadcast-message: "<gold>{player}</gold> heeft de <aqua>{cleaner}</aqua>-opruiming geannuleerd. Volgende opruiming over <yellow>{minutes}</yellow> minuten."
+    insufficient-funds-message: "<red>Je hebt <gold>{cost}</gold> nodig om de opruiming te annuleren.</red>"
+    disabled-message: "<red>Deze opruiming kan niet worden geannuleerd.</red>"
+    no-economy-message: "<red>Economie is niet beschikbaar. Opruiming kan niet worden geannuleerd.</red>"
