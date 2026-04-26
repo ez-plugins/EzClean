@@ -77,6 +77,42 @@ pile-detection:
   # When enabled, named entities (e.g. armor stands or mobs with display names) are excluded.
   ignore-named-entities: true
 
+# Per-chunk entity caps — removes excess entities when a chunk exceeds the configured
+# limit, regardless of how they are distributed within the chunk.
+# Unlike pile-detection (same-block stacks), chunk caps prevent lag buildup from
+# distributed entity accumulation between cleanup intervals.
+# The cap check runs after all protection rules, so tamed/named/proximity-protected
+# entities are always exempt.
+chunk-caps:
+  enabled: false
+  # Maximum entities of the tracked categories allowed per chunk (16×256×16 column).
+  max-entities-per-chunk: 150
+  # Entity categories to count toward the cap.
+  # Valid values: HOSTILE_MOBS, PASSIVE_MOBS, DROPPED_ITEMS, EXPERIENCE_ORBS, ALL
+  categories:
+    - HOSTILE_MOBS
+    - PASSIVE_MOBS
+  # Entity types exempt from chunk-cap counting (fine-grained override on top of protection rules).
+  ignore-types: []
+  # When true, entities with a custom name do not count toward the cap.
+  ignore-named-entities: true
+
+# Entity / item merging — consolidate nearby identical entities instead of deleting them.
+# Merging runs as an early pass inside each cleanup, before the normal removal evaluation.
+# Merged-away entities appear in statistics under 'merged-items' and 'merged-orbs' groups.
+merging:
+  enabled: false
+  # Merge nearby dropped items of the same type into a single stack.
+  merge-items: true
+  # Merge nearby experience orbs into a single orb.
+  merge-experience-orbs: true
+  # Radius (in blocks) within which two same-type entities are eligible for merging.
+  radius-blocks: 3
+  # Maximum stack size for merged item stacks.
+  # Set to 0 (default) to use each item's vanilla per-material max stack size.
+  # Set a positive value to cap stacks at that amount regardless of material.
+  max-stack-size: 0
+
 remove:
   hostile-mobs: true
   # Includes farm animals, golems, ambient mobs, and aquatic wildlife.
@@ -89,6 +125,13 @@ remove:
   area-effect-clouds: true
   falling-blocks: true
   primed-tnt: true
+  # Age-based removal gates.
+  # An entity must have been alive for at least this many server ticks before it is
+  # eligible for removal.  Set to 0 (default) to remove regardless of age.
+  # Useful to let freshly dropped loot or orbs persist briefly before being culled.
+  # Reference: 1 tick ≈ 50 ms at 20 TPS  (200 ticks ≈ 10 s, 1200 ticks ≈ 60 s).
+  dropped-items-min-age-ticks: 0
+  experience-orbs-min-age-ticks: 0
 
 protect:
   players: true
@@ -123,6 +166,14 @@ protect:
     # Protect items that carry a persistent data container key matching one of these entries.
     # Format: "namespace:key"  (e.g. "myplugin:bound_item", "oraxen:id")
     pdc-keys: []
+
+  # Player-proximity protection for ground entities.
+  # Protect dropped items / experience orbs that are within N blocks of any online player.
+  # Set to 0 (default) to disable. Useful to avoid cleaning up loot a player just dropped
+  # or orbs they are actively collecting.
+  player-proximity:
+    dropped-items: 0
+    experience-orbs: 0
 
 # Defensive entity-type blacklist.
 # The following types are protected by the built-in defensive blacklist and will
@@ -187,6 +238,83 @@ performance:
   # Has no effect on Folia (all removals are dispatched in a single pass).
   async-removal-batch-size: 500
 
-# Console commands to run after every cleanup finishes. Standard Minecraft command syntax.
+  # TPS/MSPT-aware scheduling — skip or defer cleanups while the server is under heavy load.
+  # Enabled by default ('opt-out' behaviour).  Set enabled: false to disable entirely.
+  # When Spark is installed, EzClean automatically uses Spark's higher-quality rolling
+  # TPS/MSPT averages instead of the Bukkit reflection fallback.
+  tps-aware:
+    enabled: true
+    # Skip the cleanup run if the 1-minute TPS average falls below this threshold.
+    # Full-speed TPS is 20.0; values below ~18 indicate the server is struggling.
+    min-tps: 16.0
+    # Skip the cleanup run if the average milliseconds-per-tick exceeds this threshold.
+    # At 20 TPS a tick takes exactly 50 ms.  Values above 50 ms indicate lag.
+    max-mspt: 50.0
+    # Maximum number of seconds to keep deferring before forcing a run regardless of load.
+    # Prevents indefinite postponement on persistently laggy servers.
+    # Set to 0 to defer indefinitely (not recommended).
+    max-defer-seconds: 120
+
+  # Spark profiler integration — automatically start a Spark profiler session when a
+  # cleanup run removes an unusually large number of entities.  The profiler captures
+  # a CPU/entity trace that can be used to identify which plugin or player behaviour is
+  # responsible for the buildup.  A shareable report link is printed to the console when
+  # the session completes.
+  # Requires Spark (https://spark.lucko.me/) to be installed.
+  spark:
+    auto-profile:
+      # Set to true to enable automatic profiling on large cleanup runs.
+      enabled: false
+      # Minimum entity count that must be scheduled for removal to trigger the profiler.
+      # Tune this to a value above your server's normal range so profiling only fires
+      # when something is genuinely wrong.
+      threshold: 1000
+      # How long to run the profiler (seconds).  The profiler stops automatically and
+      # uploads a report after this duration.  Minimum: 5 s.
+      duration-seconds: 30
+
+
 # Example: execute in overworld run summon lightning_bolt ~ ~ ~
 post-cleanup-commands: []
+
+# Optional integrations with other plugins.
+integrations:
+
+  # EzCountdown integration — mirrors each cleanup countdown to EzCountdown's display system.
+  # Requires EzCountdown (https://github.com/ez-plugins/EzCountdown) to be installed.
+  # When enabled, a DURATION-type countdown is registered in EzCountdown for this cleaner profile
+  # and is automatically restarted at the full interval after every cleanup cycle.
+  ezcountdown:
+    # Set to true to enable the integration for this cleaner.
+    enabled: false
+
+    # Name of the EzCountdown countdown entry.
+    # Use {cleaner} to include the cleaner profile's ID in the name.
+    # Avoid changing this after first enabling the integration to prevent orphaned entries
+    # in EzCountdown's storage.
+    countdown-name: "ezclean-{cleaner}"
+
+    # EzCountdown display types to use.
+    # Available values: ACTION_BAR, BOSS_BAR, CHAT, TITLE, SCOREBOARD
+    display-types:
+      - ACTION_BAR
+
+    # Format string passed to EzCountdown for countdown display rendering.
+    # Refer to EzCountdown's documentation for supported placeholders and MiniMessage formatting.
+    format-message: "<yellow>Entity cleanup in <gold><time_left></gold></yellow>"
+
+    # Optional message broadcast by EzCountdown when the countdown starts.
+    # Leave blank ("") to disable.
+    start-message: ""
+
+    # Optional message broadcast by EzCountdown when the countdown ends.
+    # Leave blank ("") to disable.
+    end-message: ""
+
+    # Permission node that players must have to see the countdown display.
+    # Leave blank ("") to show the countdown to all players.
+    visibility-permission: ""
+
+    # How often (in seconds) EzCountdown updates its display.
+    # Lower values are smoother but generate more update events.
+    update-interval-seconds: 1
