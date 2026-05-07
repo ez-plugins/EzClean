@@ -1,8 +1,10 @@
-# EzClean – Minecraft Entity Cleaner Plugin
+# EzClean - Minecraft Entity Cleaner Plugin
 
-**Automated entity sweeps, live countdowns, pay-to-cancel, and async scheduler monitoring for SpigotMC, Paper, and Purpur 1.21+**
+Automated entity sweeps, live countdowns, pay-to-cancel, Discord webhooks, PlaceholderAPI, Spark
+profiling, and async scheduler monitoring for **Paper 26.1+**, Spigot, and Purpur.
 
-**SpigotMC/Bukkit, Paper, Purpur 1.21+, Java 17+, Multi-profile scheduler, MiniMessage broadcasts, WorldGuard bypass, Vault (optional)**
+**Platform:** Paper 26.1+, Spigot/Bukkit, Purpur | **Java:** 17+ | **Storage:** SQLite (bundled) or MySQL  
+**Optional:** Vault, WorldGuard, Discord, PlaceholderAPI, Spark, EzCountdown
 
 ---
 
@@ -32,7 +34,23 @@ EzClean offers powerful features to keep your Minecraft server running smoothly 
 - **Lightweight configuration** – Cleaners, MiniMessage copy, and death chests in tidy YAML files.
 - **Hot reload friendly** – Reload profile changes instantly with your favorite plugin manager or `/reload confirm`.
 - **Smart pile detection** – Automatically cull stacks of drops or other spammy entities that exceed your per-block limit.
+- **Entity merging** – Merge nearby same-type entities before removal to reduce packet spam and improve sweep efficiency.
 - **Optional death chests** – Capture player drops in temporary containers that despawn on a timer instead of scattering items everywhere.
+- **Language / i18n support** – Ships with bundled English, Dutch, and Spanish translations; drop any
+  `<lang>.yml` into the `lang/` folder to add your own locale.
+- **Discord webhook notifications** – Post cleanup summaries to a Discord channel by setting a webhook
+  URL in `config.yml`. No bot token or extra plugins required.
+- **PlaceholderAPI support** – Expose live stats as `%ezclean_<stat>%` placeholders for scoreboards,
+  holograms, and chat formatters.
+- **Spark integration** – Use Spark's precise TPS/MSPT rolling averages for smarter scheduling and
+  trigger automatic profiler sessions when entity counts spike.
+- **EzCountdown integration** – Drive pre-cleanup countdowns through EzCountdown for richer,
+  theme-able announcements.
+- **Storage-backed stats** – Persist cleanup statistics across restarts with the bundled SQLite database
+  or an external MySQL/MariaDB instance.
+- **Update notifier** – Ops receive a clickable in-chat notice when a newer EzClean version is available.
+- **Interactive setup GUI** – Configure cleaner profiles through a point-and-click inventory wizard
+  without touching YAML.
 
 ---
 
@@ -41,21 +59,22 @@ EzClean offers powerful features to keep your Minecraft server running smoothly 
 Take full control over what entities are removed or protected on your Minecraft server. Mix and match profiles, entity groups, and custom rules for ultimate flexibility.
 
 - Create unlimited cleaner profiles, each with unique world targets, countdown cadence, and broadcast messages.
-- Toggle entity groups—hostile mobs, passive mobs, villagers, vehicles, drops, orbs, projectiles, clouds, falling blocks, TNT—per profile.
+- Toggle entity groups (hostile mobs, passive mobs, villagers, vehicles, drops, orbs, projectiles,
+  clouds, falling blocks, TNT) per profile.
 - Fine-tune specific `EntityType` values using `keep`/`remove` arrays to protect custom mobs or purge event clutter.
-- Mix profiles for global sweeps, world-specific cleanups, or niche arenas—without affecting other schedules.
+- Mix profiles for global sweeps, world-specific cleanups, or niche arenas, without affecting other schedules.
 - Reload the plugin to instantly apply changes and monitor `/ezclean time` for updated countdowns.
 
 ---
 
 ## Pay-to-Cancel Cleanups
 
-Let staff delay scheduled cleanups with a single click—optionally charging a Vault-backed fee and showing dynamic MiniMessage prompts.
+Let staff delay scheduled cleanups with a single click, optionally charging a Vault-backed fee and showing dynamic MiniMessage prompts.
 
 - Clickable countdown broadcasts let staff with `ezclean.cancel` permission delay the next cleanup instantly.
 - Charge an optional Vault-backed fee per profile and automatically refund players if cancellation fails.
 - Customize hover, success, broadcast, and error messages with MiniMessage placeholders: `{player}`, `{cleaner}`, `{minutes}`, `{cost}`.
-- Players without permission see the standard warning—keeping the feature gated to trusted ranks.
+- Players without permission see the standard warning, keeping the feature gated to trusted ranks.
 
 ---
 
@@ -140,6 +159,8 @@ especially useful during peak times or after adding new plugins.
 
 ## Admin Commands
 
+- `/ezclean help` – List all available subcommands and their required permissions.
+- `/ezclean setup` – Open the interactive inventory GUI to configure a cleaner profile without editing YAML.
 - `/ezclean run [cleaner]` – Trigger any configured profile instantly when staff need a manual sweep.
 - `/ezclean cancel [cleaner]` – Delay the next cleanup cycle (and optionally charge a Vault fee) via command or the clickable broadcast prompt.
 - `/ezclean time [cleaner]` – Check how many minutes remain before the next scheduled cleanup runs.
@@ -165,7 +186,7 @@ especially useful during peak times or after adding new plugins.
 ## WorldGuard Bypass Tag
 
 - Install [WorldGuard](https://enginehub.org/worldguard) alongside EzClean to unlock region-based exclusions.
-- EzClean automatically registers the `ezclean-bypass` state flag during startup—no manual flag setup required.
+- EzClean automatically registers the `ezclean-bypass` state flag during startup. No manual flag setup required.
 - Use `/rg flag <region> ezclean-bypass allow` to mark safe zones (spawn, showcases, redstone labs) that should never be swept.
 - Switch the flag back to `deny` (or remove it) when you want EzClean to resume removing entities from that region.
 - Entities inside an `allow` region are skipped while the rest of the server is tidied normally.
@@ -293,9 +314,11 @@ inventory-title: "<gold>Death Chest</gold>"
 
 ## Requirements
 
-- Java 17 or newer (matches the Paper 1.21 API baseline).
-- Paper or Purpur 1.21+ server build.
+- Java 17 or newer (matches the Paper 26.1 API baseline).
+- Paper or Purpur 26.1+ server build.
+- SQLite is bundled. No setup needed. Set `storage.type: mysql` in `config.yml` to use MySQL/MariaDB instead.
 - Vault + economy provider (only if you enable pay-to-cancel cleanups).
+- Optional: PlaceholderAPI, Spark, EzCountdown, WorldGuard (all auto-detected on startup).
 - Optional: A plugin manager if you prefer in-game reloads instead of full restarts.
 
 ---
