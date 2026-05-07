@@ -19,10 +19,10 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      - name: Build and install MockBukkit dev/26.1.1
+      - name: Build and install MockBukkit d245e0a
         run: |
-          git clone --depth=1 --branch dev/26.1.1 https://github.com/MockBukkit/MockBukkit.git /tmp/MockBukkit
-          cd /tmp/MockBukkit && ./gradlew publishToMavenLocal -xtest -xjavadoc
+          git clone https://github.com/MockBukkit/MockBukkit.git /tmp/MockBukkit
+          cd /tmp/MockBukkit && git checkout d245e0a && ./gradlew publishToMavenLocal -xtest -xjavadoc
 
       - name: Run tests
         run: ./mvnw -B test
