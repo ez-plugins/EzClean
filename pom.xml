@@ -139,8 +139,8 @@
         </dependency>
         <dependency>
             <groupId>org.mockbukkit.mockbukkit</groupId>
-            <artifactId>mockbukkit-v26.1</artifactId>
-            <version>dev-d245e0a</version>
+            <artifactId>mockbukkit-v26.1.2</artifactId>
+            <version>4.113.0</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
