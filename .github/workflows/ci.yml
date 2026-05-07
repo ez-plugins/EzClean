@@ -27,11 +27,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-m2-
 
-      - name: Build and install MockBukkit dev/26.1.1
-        run: |
-          git clone --depth=1 --branch dev/26.1.1 https://github.com/MockBukkit/MockBukkit.git /tmp/MockBukkit
-          cd /tmp/MockBukkit && ./gradlew publishToMavenLocal -xtest -xjavadoc
-
       - name: Run tests
         run: mvn -U -e -B -DskipTests=false test
       - name: Build package

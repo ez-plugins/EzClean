@@ -25,10 +25,5 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      - name: Build and install MockBukkit dev/26.1.1
-        run: |
-          git clone --depth=1 --branch dev/26.1.1 https://github.com/MockBukkit/MockBukkit.git /tmp/MockBukkit
-          cd /tmp/MockBukkit && ./gradlew publishToMavenLocal -xtest -xjavadoc
-
       - name: Run resource YAML validation
         run: ./mvnw -B test -Dtest=ResourceYamlValidationUnitTest
