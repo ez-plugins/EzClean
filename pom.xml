@@ -310,6 +310,13 @@
         </plugins>
     </build>
 
+    <distributionManagement>
+        <repository>
+            <id>github</id>
+            <url>https://maven.pkg.github.com/ez-plugins/EzClean</url>
+        </repository>
+    </distributionManagement>
+
     <profiles>
         <!--
           Activate with: mvn test -P coverage
