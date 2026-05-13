@@ -77,6 +77,8 @@ public final class SetupGUI {
     private final EzCleanPlugin plugin;
     private final Logger logger;
     private final Map<UUID, SetupSession> sessions = new HashMap<>();
+    /** Players currently navigating between GUI screens; prevents onClose from wiping their session. */
+    private final java.util.Set<UUID> transitioning = new java.util.HashSet<>();
 
     public SetupGUI(EzCleanPlugin plugin) {
         this.plugin = plugin;
@@ -118,6 +120,7 @@ public final class SetupGUI {
         inv.setItem(LIST_SLOT_NEW, buildCreateCleanerItem());
         inv.setItem(LIST_SLOT_CLOSE, buildCloseItem());
 
+        transitioning.add(player.getUniqueId());
         player.openInventory(inv);
     }
 
@@ -158,9 +161,11 @@ public final class SetupGUI {
     }
 
     /**
-     * Called when the player closes the GUI. Removes the player's session.
+     * Called when the player closes the GUI. Removes the player's session unless they are
+     * navigating between GUI screens (in which case we preserve the session).
      */
     public void onClose(Player player) {
+        if (transitioning.remove(player.getUniqueId())) return;
         sessions.remove(player.getUniqueId());
     }
 
@@ -428,6 +433,7 @@ public final class SetupGUI {
         for (int s = 46; s <= 52; s++) inv.setItem(s, glass);
         inv.setItem(SLOT_DISCARD, buildDiscardItem());
 
+        transitioning.add(player.getUniqueId());
         player.openInventory(inv);
     }
 

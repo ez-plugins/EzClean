@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.0.1 - 2026-05-13
+
+### Bug Fixes
+- Fixed `NullPointerException` when running `/ezclean setup` caused by `SetupGUI` being initialized after `registerCommands()` was called during plugin enable.
+- Fixed `/ezclean setup` editor doing nothing when clicked: navigating between list and editor screens fired `InventoryCloseEvent`, which wiped the player's session before any click could be processed.
+
 ## 3.0.0
 
 EzClean 3.0.0 focuses on making recurring entity cleanup clearer, more configurable, and easier to manage for live servers.

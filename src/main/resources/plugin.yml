@@ -44,6 +44,9 @@ permissions:
   ezclean.deathchest.limit.bypass:
     description: Bypasses the per-player death chest limit.
     default: op
+  ezclean.deathchest.protection.bypass:
+    description: Allows opening any player's death chest regardless of ownership.
+    default: op
   ezclean.setup:
     description: Allows admins to open the EzClean setup GUI.
     default: op

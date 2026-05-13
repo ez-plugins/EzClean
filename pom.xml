@@ -5,7 +5,7 @@
 
     <groupId>com.skyblockexp</groupId>
     <artifactId>ezclean</artifactId>
-    <version>3.0.0</version>
+    <version>3.0.1</version>
     <name>EzClean Plugin</name>
     <description>Standalone plugin providing automated hourly entity cleanup cycles.</description>
     <packaging>jar</packaging>
