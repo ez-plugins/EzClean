@@ -11,6 +11,7 @@ All commands require the `ezclean` permission group (or individual nodes listed 
 
 | Command | Permission | Description |
 |---|---|---|
+| `/ezclean setup` | `ezclean.setup` | Open the inventory GUI to configure cleaner profiles |
 | `/ezclean run [id]` | `ezclean.clean` | Immediately trigger a cleanup for one or all cleaner profiles |
 | `/ezclean cancel [id]` | `ezclean.cancel` | Pay to cancel the next upcoming cleanup (Vault required) |
 | `/ezclean reload` | `ezclean.reload` | Reload all YAML config files without restarting the server |
@@ -18,6 +19,25 @@ All commands require the `ezclean` permission group (or individual nodes listed 
 | `/ezclean toggle <feature> [id]` | `ezclean.toggle` | Toggle a feature on/off live and persist it to YAML |
 | `/ezclean usage [plugin\|live\|stop]` | `ezclean.usage` | Inspect Bukkit scheduler usage by plugin |
 | `/ezclean stats [id]` | `ezclean.stats` | View detailed cleanup statistics |
+| `/ezclean help` | `ezclean.help` | Show in-game command reference |
+
+---
+
+## `/ezclean setup`
+
+Opens an inventory-based GUI that lets admins configure cleaner profiles without editing YAML
+files manually. Only usable by players (not the console).
+
+The GUI has two screens:
+
+- **List screen** - shows every loaded cleaner profile. Click a profile to open it for editing,
+  or click "New" to create a fresh profile from the default template.
+- **Editor screen** - shows all configurable toggles and numeric values for the selected profile.
+  Left-click / right-click numeric items to decrement / increment. Click **Save & Reload** to
+  write changes to disk and reload the plugin automatically, or **Discard** to close without
+  saving.
+
+![Clean Lag GUI settings](https://i.ibb.co/YFqpmRvH/image.png)
 
 ---
 
@@ -95,4 +115,15 @@ and TPS impact per profile, and a breakdown of removal reasons (entity type grou
 ```text
 /ezclean stats            # stats for all profiles
 /ezclean stats default    # stats for the "default" profile only
+```
+
+---
+
+## `/ezclean help`
+
+Displays an in-game command reference, filtered to commands the sender has permission to use.
+Clickable entries auto-fill the command into the chat box.
+
+```text
+/ezclean help
 ```
