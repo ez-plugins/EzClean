@@ -89,6 +89,10 @@ public final class Bootstrap {
             EzCountdownIntegration ezCountdownIntegration = initializeEzCountdownIntegration();
             Registry.setEzCountdownIntegration(ezCountdownIntegration);
 
+            // Register setup GUI and its listener (must be before applyConfiguration, which calls registerCommands)
+            setupGUI = new SetupGUI(plugin);
+            plugin.getServer().getPluginManager().registerEvents(new SetupGUIListener(setupGUI), plugin);
+
             // Load and apply configuration (also initialises StorageService + StatsTracker)
             List<CleanupSettings> cleanupSettings = applyConfiguration(configurationLoader.loadConfiguration());
 
@@ -109,10 +113,6 @@ public final class Bootstrap {
 
             // Initialise Discord webhook integration
             initializeDiscordWebhook();
-
-            // Register setup GUI and its listener
-            setupGUI = new SetupGUI(plugin);
-            plugin.getServer().getPluginManager().registerEvents(new SetupGUIListener(setupGUI), plugin);
 
             // Log Spark integration status
             if (SparkHook.isEnabled()) {
