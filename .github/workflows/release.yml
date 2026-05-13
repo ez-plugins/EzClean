@@ -1,33 +1,188 @@
 name: Release
 
+# Fires when a vX.Y.Z tag is pushed, or can be triggered manually with a tag.
 on:
   push:
     tags:
-      - 'v*'
-
-permissions:
-  contents: write
+      - 'v[0-9]*.[0-9]*.[0-9]*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g. v3.0.1)'
+        required: true
 
 jobs:
   release:
+    name: Stable Release
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+    permissions:
+      contents: write
 
-      - name: Set up Java 25
-        uses: actions/setup-java@v4
+    steps:
+      # ──────────────────────────────────────────────────────────────────────
+      #  1. CHECKOUT
+      # ──────────────────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          # For push:tags: github.ref is the tag ref (e.g. refs/tags/v3.0.1).
+          # For workflow_dispatch: github.ref is the branch (e.g. refs/heads/main).
+          # We never use the tag input here because the tag may not exist yet —
+          # it is created in a later step.
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+
+      # ──────────────────────────────────────────────────────────────────────
+      #  2. RESOLVE VERSION
+      # ──────────────────────────────────────────────────────────────────────
+      - name: Resolve version from tag
+        id: meta
+        run: |
+          REF="${{ github.event.inputs.tag || github.ref_name }}"
+          VERSION="${REF#v}"
+          echo "ref=${REF}"         >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Releasing version: ${VERSION}"
+
+      # ──────────────────────────────────────────────────────────────────────
+      #  3. CREATE TAG (if it doesn't exist yet)
+      #
+      #  When triggered via workflow_dispatch the tag may not exist yet.
+      #  This step creates and pushes it so the GitHub Release can reference it.
+      # ──────────────────────────────────────────────────────────────────────
+      - name: Create and push tag if missing
+        run: |
+          REF="${{ steps.meta.outputs.ref }}"
+          if git rev-parse --verify --quiet "refs/tags/${REF}" > /dev/null; then
+            echo "Tag ${REF} already exists; skipping creation."
+          else
+            git config user.name  "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git tag "${REF}"
+            git push origin "${REF}"
+            echo "Created and pushed tag ${REF}."
+          fi
+
+      # ──────────────────────────────────────────────────────────────────────
+      #  4. BUILD & VERSION
+      # ──────────────────────────────────────────────────────────────────────
+      - name: Set up JDK 25
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '25'
           cache: maven
 
-      - name: Build package
-        run: mvn -U -DskipTests package
+      - name: Set release version in POM
+        run: |
+          ./mvnw -B -ntp versions:set \
+            -DnewVersion="${{ steps.meta.outputs.version }}" \
+            -DgenerateBackupPoms=false
 
-      - name: Create GitHub Release and upload artifacts
-        uses: softprops/action-gh-release@v1
-        with:
-          files: target/*.jar
+      - name: Build
+        run: ./mvnw -B -ntp -DskipTests package
+
+      # ──────────────────────────────────────────────────────────────────────
+      #  5. EXTRACT CHANGELOG
+      #
+      #  Reads the section for this version from CHANGELOG.md.
+      #  Falls back to a placeholder when the section is missing.
+      # ──────────────────────────────────────────────────────────────────────
+      - name: Extract changelog for this version
+        id: changelog
+        run: |
+          VERSION="${{ steps.meta.outputs.version }}"
+          HEADER="## ${VERSION}"
+
+          # index() fixed-string match avoids regex issues with dots in versions.
+          # Section headers in CHANGELOG.md look like: ## 3.0.1 - 2026-05-13
+          NOTES=$(awk \
+            -v hdr="$HEADER" \
+            '/^## [0-9]/ && p { exit }
+             index($0, hdr) == 1 { p=1; next }
+             p { print }' \
+            CHANGELOG.md)
+
+          if [[ -z "$NOTES" ]]; then
+            NOTES="No changelog entry found for ${VERSION}."
+          fi
+
+          printf '%s\n' "$NOTES" > release-notes.md
+          echo "=== Release notes preview ===" && cat release-notes.md
+
+      # ──────────────────────────────────────────────────────────────────────
+      #  6. GITHUB RELEASE
+      # ──────────────────────────────────────────────────────────────────────
+      - name: Create GitHub Release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ steps.meta.outputs.ref }}" \
+            --title "EzClean ${{ steps.meta.outputs.version }}" \
+            --notes-file release-notes.md \
+            "target/EzClean-${{ steps.meta.outputs.version }}.jar"
+
+      # ──────────────────────────────────────────────────────────────────────
+      #  7. MODRINTH RELEASE
+      # ──────────────────────────────────────────────────────────────────────
+      - name: Release to Modrinth (stable)
+        uses: Kir-Antipov/mc-publish@v3.3
+        with:
+          modrinth-id: "Nfe9727w"
+          modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
+          modrinth-featured: true
+          name: "EzClean ${{ steps.meta.outputs.version }}"
+          version: "${{ steps.meta.outputs.version }}"
+          version-type: release
+          files: "target/EzClean-${{ steps.meta.outputs.version }}.jar"
+          game-versions: ">=1.21"
+          game-versions-filter: release
+          loaders: |
+            bukkit
+            spigot
+            paper
+            purpur
+            folia
+          changelog-file: release-notes.md
+          dependencies: |
+            placeholderapi(optional)
+            worldguard(optional)
+            ezcountdown(optional)
+
+      # ──────────────────────────────────────────────────────────────────────
+      #  8. DISCORD NOTIFICATION
+      # ──────────────────────────────────────────────────────────────────────
+      - name: Post Discord notification
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.EZCLEAN_RELEASE_DISCORD_WEBHOOK }}
+        run: |
+          REPO="${{ github.repository }}"
+          VERSION="${{ steps.meta.outputs.version }}"
+          GH_URL="https://github.com/${REPO}/releases/tag/${{ steps.meta.outputs.ref }}"
+          MODRINTH_URL="https://modrinth.com/plugin/Nfe9727w/version/${VERSION}"
+
+          # Truncate changelog to fit Discord's 4096-char embed description limit.
+          CHANGELOG=$(head -c 3800 release-notes.md || true)
+
+          PAYLOAD=$(jq -n \
+            --arg version   "$VERSION" \
+            --arg gh_url    "$GH_URL" \
+            --arg modrinth_url "$MODRINTH_URL" \
+            --arg changelog "$CHANGELOG" \
+            '{
+              embeds: [{
+                title: ("🚀 EzClean " + $version + " — Stable Release"),
+                url: $gh_url,
+                color: 3447003,
+                description: $changelog,
+                fields: [
+                  { name: "GitHub Release", value: ("[View on GitHub](" + $gh_url + ")"),       inline: true },
+                  { name: "Modrinth",       value: ("[Download on Modrinth](" + $modrinth_url + ")"), inline: true }
+                ],
+                footer: { text: "Stable release" }
+              }]
+            }')
+
+          curl --fail -s -X POST "$DISCORD_WEBHOOK" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD"
